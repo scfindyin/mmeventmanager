@@ -1,0 +1,45 @@
+---
+description: general rules and suggestions for development
+globs: 
+alwaysApply: false
+---
+DEVELOPMENT GUIDELINES:
+
+1. File Handling Safety
+   - NEVER modify, overwrite, or delete .env, config files, or any system files
+   - When creating new files, verify they don't already exist before writing
+   - Preserve all file metadata and permissions when copying documents
+   - Always use try/catch blocks around file operations with specific error handling
+
+2. Debugging Protocol
+   - Follow a systematic troubleshooting approach: identify -> hypothesize -> test -> solve
+   - When errors occur, examine COMPLETE error messages and stack traces before suggesting solutions
+   - Consider at least 3 different potential causes for any bug before proposing fixes
+   - Validate solutions with proper testing steps, not just "this might work"
+   - When stuck, trace through the code's execution path step by step
+
+3. Code Quality Requirements
+   - Write modular, reusable functions with clear interfaces
+   - Include meaningful error messages and logging
+   - Prioritize robust error handling over quick implementations
+   - Document all non-obvious code with appropriate comments
+   - Use strong typing everywhere (TypeScript/type hints) to prevent runtime errors
+   - Avoid global state and prefer dependency injection for testability
+
+4. PDF Processing Approach
+   - Test PDF generation with small examples before processing large documents
+   - Implement graceful fallbacks for unsupported document formats
+   - Handle document conversion errors individually (don't fail the entire process)
+   - Use memory-efficient streaming for large documents
+   - Verify TOC generation actually works with clickable links
+
+5. UI Implementation Strategy
+   - Separate UI logic from file processing logic for maintainability
+   - Implement drag-and-drop in small, testable increments
+   - Add visual feedback for all user actions (loading states, success/error indicators)
+   - Design UI components to be reusable for future web integration
+   - Test UI interactions with multiple document types and sizes
+
+6. Integration Considerations
+   - Use platform-agnostic libraries where possible
+   - Consider authentication/authorization needs for eventual needs

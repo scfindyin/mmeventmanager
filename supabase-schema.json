@@ -1,0 +1,192 @@
+[
+  {
+    "name": "events",
+    "columns": [
+      {
+        "name": "id",
+        "type": "text",
+        "is_primary": true,
+        "example_value": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f"
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "MITMasters Restoration Bootcamp Advanced Documentation Agenda"
+      },
+      {
+        "name": "subtitle",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "Levels 3-4: The Standard of Care & Advanced Strategies"
+      },
+      {
+        "name": "notes",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "For Resto. PM’s/GM’s, Owners, Plaintiff Attorneys, PA's"
+      },
+      {
+        "name": "start_date",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "2025-03-03"
+      },
+      {
+        "name": "end_date",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "2025-03-07"
+      },
+      {
+        "name": "logo_url",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "https://yeqdapkrkrboaqwvzbdu.supabase.co/storage/v1/object/public/event-assets/logos/1741813693711-la7q75r5gpm.png?v=1741813694564"
+      },
+      {
+        "name": "created_at",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "2025-03-12T20:43:02.667768+00:00"
+      },
+      {
+        "name": "start_time",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "09:00"
+      },
+      {
+        "name": "end_time",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "16:30"
+      }
+    ],
+    "row_count": 1,
+    "sample_data": [
+      {
+        "id": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f",
+        "title": "MITMasters Restoration Bootcamp Advanced Documentation Agenda",
+        "subtitle": "Levels 3-4: The Standard of Care & Advanced Strategies",
+        "notes": "For Resto. PM’s/GM’s, Owners, Plaintiff Attorneys, PA's",
+        "start_date": "2025-03-03",
+        "end_date": "2025-03-07",
+        "logo_url": "https://yeqdapkrkrboaqwvzbdu.supabase.co/storage/v1/object/public/event-assets/logos/1741813693711-la7q75r5gpm.png?v=1741813694564",
+        "created_at": "2025-03-12T20:43:02.667768+00:00",
+        "start_time": "09:00",
+        "end_time": "16:30"
+      }
+    ]
+  },
+  {
+    "name": "agenda_items",
+    "columns": [
+      {
+        "name": "id",
+        "type": "text",
+        "is_primary": true,
+        "example_value": "3c8915c7-b2d6-4646-9c64-4d30b03af20c"
+      },
+      {
+        "name": "event_id",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f"
+      },
+      {
+        "name": "topic",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "Session 1: Get to Know Us/ Foundation"
+      },
+      {
+        "name": "duration",
+        "type": "integer",
+        "is_primary": false,
+        "example_value": 60
+      },
+      {
+        "name": "day_index",
+        "type": "integer",
+        "is_primary": false,
+        "example_value": 0
+      },
+      {
+        "name": "position",
+        "type": "integer",
+        "is_primary": false,
+        "example_value": 0
+      },
+      {
+        "name": "start_time",
+        "type": "unknown",
+        "is_primary": false,
+        "example_value": null
+      },
+      {
+        "name": "end_time",
+        "type": "unknown",
+        "is_primary": false,
+        "example_value": null
+      }
+    ],
+    "row_count": 1,
+    "sample_data": [
+      {
+        "id": "3c8915c7-b2d6-4646-9c64-4d30b03af20c",
+        "event_id": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f",
+        "topic": "Session 1: Get to Know Us/ Foundation",
+        "duration": 60,
+        "day_index": 0,
+        "position": 0,
+        "start_time": null,
+        "end_time": null
+      }
+    ]
+  },
+  {
+    "name": "sub_items",
+    "columns": [],
+    "row_count": 0,
+    "sample_data": []
+  },
+  {
+    "name": "attendees",
+    "columns": [
+      {
+        "name": "id",
+        "type": "text",
+        "is_primary": true,
+        "example_value": "67535210-e362-42bd-a89b-96a920fa7fb2"
+      },
+      {
+        "name": "event_id",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f"
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "Steve Foster"
+      },
+      {
+        "name": "email",
+        "type": "text",
+        "is_primary": false,
+        "example_value": "scfindy@gmail.com"
+      }
+    ],
+    "row_count": 1,
+    "sample_data": [
+      {
+        "id": "67535210-e362-42bd-a89b-96a920fa7fb2",
+        "event_id": "4bb972b9-cbea-4bbe-bb99-a7356fab4a7f",
+        "name": "Steve Foster",
+        "email": "scfindy@gmail.com"
+      }
+    ]
+  }
+]

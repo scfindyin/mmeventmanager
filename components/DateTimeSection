@@ -1,0 +1,100 @@
+"use client"
+
+import React from "react";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
+// This component can be added directly to your event-form.tsx file
+export function DateTimeSection({ form, logDebug = () => {} }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Date Range Picker - 1/3 width */}
+        <div>
+          <FormLabel>Date Range</FormLabel>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full px-3 py-2 justify-start text-left"
+              >
+                <div className="flex w-full justify-between items-center">
+                  <span>
+                    {form.watch("start_date") && form.watch("end_date") ? (
+                      `${format(form.watch("start_date"), "MM/dd/yyyy")} - ${format(form.watch("end_date"), "MM/dd/yyyy")}`
+                    ) : (
+                      "Select date range"
+                    )}
+                  </span>
+                  <CalendarIcon className="h-4 w-4 opacity-50" />
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={form.watch("start_date") || new Date()}
+                selected={{
+                  from: form.watch("start_date") || undefined,
+                  to: form.watch("end_date") || undefined,
+                }}
+                onSelect={(range) => {
+                  if (range?.from) {
+                    form.setValue("start_date", range.from, { shouldValidate: true });
+                    logDebug(`Start date selected: ${range.from.toISOString()}`);
+                  }
+                  if (range?.to) {
+                    form.setValue("end_date", range.to, { shouldValidate: true });
+                    logDebug(`End date selected: ${range.to.toISOString()}`);
+                  }
+                }}
+                numberOfMonths={1}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Start Time - 1/3 width */}
+        <div>
+          <FormField
+            control={form.control}
+            name="start_time"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Start Time</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} className="w-full" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* End Time - 1/3 width */}
+        <div>
+          <FormField
+            control={form.control}
+            name="end_time"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>End Time</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} className="w-full" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
