@@ -11,6 +11,21 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd"
 import { ErrorDialog } from "@/components/error-dialog"
 import { getErrorMessage } from "@/lib/error-utils"
 
+// Helper function to format time in 12-hour format
+function formatTo12Hour(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  
+  const [hourStr, minuteStr] = time24.split(':');
+  const hour = parseInt(hourStr, 10);
+  
+  if (isNaN(hour)) return time24;
+  
+  const period = hour >= 12 ? 'pm' : 'am';
+  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  
+  return `${hour12}:${minuteStr}${period}`;
+}
+
 interface AgendaItemListProps {
   items: AgendaItem[]
   isLoading: boolean
@@ -20,6 +35,8 @@ interface AgendaItemListProps {
 
 export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaItemListProps) {
   const [currentItems, setCurrentItems] = useState<AgendaItem[]>(items)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<AgendaItem | null>(null)
   const { toast } = useToast()
   const [listError, setListError] = useState<Error | string | null>(null)
 
@@ -27,6 +44,20 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
   if (JSON.stringify(items) !== JSON.stringify(currentItems)) {
     setCurrentItems(items)
   }
+
+  // Function to format duration in hours and minutes
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (hours === 0) {
+      return `${remainingMinutes} minutes`;
+    } else if (remainingMinutes === 0) {
+      return `${hours} hour${hours > 1 ? 's' : ''}`;
+    } else {
+      return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}`;
+    }
+  };
 
   async function handleDeleteItem(id: string) {
     try {
@@ -294,12 +325,17 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                               <CardContent className="pl-10">
                                 <div className="flex justify-between text-sm">
                                   <div>
-                                    <span className="font-medium">Duration:</span> {item.durationMinutes} minutes
+                                    <span className="font-medium">Duration:</span> {formatDuration(item.durationMinutes)}
                                   </div>
                                   <div>
-                                    <span className="font-medium">Time:</span> {item.startTime} - {item.endTime}
+                                    <span className="font-medium">Time:</span> {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
                                   </div>
                                 </div>
+                                {item.description && (
+                                  <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
+                                    {item.description}
+                                  </p>
+                                )}
                               </CardContent>
                             </Card>
                             {index < dayItems.length - 1 && (

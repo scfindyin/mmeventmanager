@@ -189,7 +189,8 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
       const itemData = {
         event_id: updatedItem.event_id,
         topic: updatedItem.topic,
-        description: updatedItem.description,
+        // Ensure description is not undefined (convert to empty string if needed)
+        description: updatedItem.description || '',
         duration_minutes: updatedItem.durationMinutes,
         day_index: updatedItem.dayIndex,
         order_position: updatedItem.order,
@@ -249,52 +250,160 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
         }
         savedItem = data
       } else {
-        console.log('✏️ Executing UPDATE:', {
+        console.log('✏️ Executing UPDATE using API-first approach for all fields:', {
           id: updatedItem.id,
-          data: itemData,
-          description: itemData.description
+          itemData
         })
 
-        const { data, error, status, statusText } = await supabase
-          .from('agenda_items')
-          .update(itemData)
-          .eq('id', updatedItem.id)
-          .select()
-          .single()
-
-        console.log('📥 UPDATE response:', {
-          success: !error,
-          data,
-          description: data?.description,
-          error
-        })
-
-        if (error) {
-          console.error('Database update failed:', {
-            error,
-            errorMessage: error.message,
-            errorDetails: error.details,
-            errorHint: error.hint,
-            errorCode: error.code,
-            itemData,
-            id: updatedItem.id,
-            status,
-            statusText
+        try {
+          // First try using the API endpoint for all updates
+          const apiPayload = { 
+            itemId: updatedItem.id, 
+            description: itemData.description,
+            topic: itemData.topic,
+            durationMinutes: updatedItem.durationMinutes,
+            dayIndex: updatedItem.dayIndex,
+            orderPosition: updatedItem.order,
+            startTime: itemData.start_time,
+            endTime: itemData.end_time,
+            fullUpdate: true,
+            useDirectSql: true
+          };
+          
+          console.log('📤 API request payload:', JSON.stringify(apiPayload, null, 2));
+          
+          const response = await fetch('/api/agenda-items/fix-description', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(apiPayload),
           })
-          throw error
+          
+          if (response.ok) {
+            const apiResult = await response.json()
+            console.log('🔧 API update succeeded:', apiResult)
+            
+            // Get the updated item data
+            const { data: fetchedItem, error: fetchError } = await supabase
+              .from('agenda_items')
+              .select('*')
+              .eq('id', updatedItem.id)
+              .single()
+              
+            if (fetchError) {
+              console.warn('Failed to fetch updated item after API update:', fetchError)
+              // Continue with regular update as fallback
+            } else {
+              savedItem = fetchedItem
+              // Skip the regular update since the API call was successful
+              console.log('Using API-updated item:', savedItem)
+            }
+          } else {
+            // Continue with regular update as fallback
+            console.log('API update failed, using fallback methods')
+            try {
+              // Get details about the error
+              const errorResponse = await response.json()
+              console.error('API error details:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorResponse
+              })
+              
+              // ⚠️ Explicitly throw to ensure errors are visible
+              const errorMessage = `API update failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorResponse)}`;
+              console.error(errorMessage);
+              throw new Error(errorMessage);
+            } catch (parseError) {
+              console.error('Could not parse error response:', parseError)
+              throw new Error(`API update failed: ${response.status} ${response.statusText}`);
+            }
+          }
+        } catch (apiError) {
+          console.error('Error with API update, falling back:', apiError)
+          // Continue with regular update as fallback
         }
-        if (!data) {
-          const noDataError = new Error('No data returned from update operation')
-          console.error('Database update failed:', {
-            error: noDataError,
-            itemData,
-            id: updatedItem.id,
-            status,
-            statusText
-          })
-          throw noDataError
+
+        // Only proceed with fallback updates if we don't have savedItem yet
+        if (!savedItem) {
+          // Try direct SQL update approach through RPC
+          try {
+            const { data: sqlData, error: sqlError } = await supabase.rpc('update_agenda_item', {
+              item_id: updatedItem.id,
+              new_topic: itemData.topic,
+              new_description: itemData.description || '',
+              new_duration: updatedItem.durationMinutes,
+              new_day_index: updatedItem.dayIndex,
+              new_order: updatedItem.order,
+              new_start_time: itemData.start_time,
+              new_end_time: itemData.end_time
+            })
+
+            console.log('🔧 SQL RPC update result:', { sqlData, sqlError })
+
+            if (sqlError) {
+              console.error('SQL RPC update failed, falling back to standard update:', sqlError)
+              throw sqlError // This will trigger the next fallback
+            } else {
+              // If SQL update was successful, fetch the updated item
+              const { data: fetchedItem, error: fetchError } = await supabase
+                .from('agenda_items')
+                .select('*')
+                .eq('id', updatedItem.id)
+                .single()
+                
+              if (fetchError || !fetchedItem) {
+                console.error('Failed to fetch updated item after SQL RPC update:', fetchError)
+                throw fetchError || new Error('Failed to fetch updated item')
+              }
+              
+              savedItem = fetchedItem
+            }
+          } catch (sqlError) {
+            // Final fallback: standard Supabase update
+            console.log('Using final fallback: standard Supabase update')
+            
+            const { data, error, status, statusText } = await supabase
+              .from('agenda_items')
+              .update(itemData)
+              .eq('id', updatedItem.id)
+              .select()
+              .single()
+
+            console.log('📥 Standard UPDATE response (fallback):', {
+              success: !error,
+              data,
+              description: data?.description,
+              error
+            })
+
+            if (error) {
+              console.error('Database update failed:', {
+                error,
+                errorMessage: error.message,
+                errorDetails: error.details,
+                errorHint: error.hint,
+                errorCode: error.code,
+                itemData,
+                id: updatedItem.id,
+                status,
+                statusText
+              })
+              throw error
+            }
+            if (!data) {
+              const noDataError = new Error('No data returned from update operation')
+              console.error('Database update failed:', {
+                error: noDataError,
+                itemData,
+                id: updatedItem.id,
+                status,
+                statusText
+              })
+              throw noDataError
+            }
+            savedItem = data
+          }
         }
-        savedItem = data
       }
 
       console.log('✅ Database save complete:', {

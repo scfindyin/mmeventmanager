@@ -65,9 +65,10 @@ export async function POST(request: Request) {
       const newAgendaItems = agendaItems.map((item) => ({
         event_id: newEvent.id,
         topic: item.topic,
-        duration: item.duration,
+        description: item.description,
+        duration_minutes: item.duration_minutes,
         day_index: item.day_index,
-        position: item.position,
+        order_position: item.order_position,
         start_time: item.start_time,
         end_time: item.end_time,
       }))

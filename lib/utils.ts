@@ -8,20 +8,59 @@ export function cn(...inputs: ClassValue[]) {
 
 // Convert a JavaScript Date to a string suitable for database storage (YYYY-MM-DD)
 export function dateToDbString(date: Date): string {
-  return format(date, "yyyy-MM-dd")
+  try {
+    // Create a string in YYYY-MM-DD format directly from date components
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Add 1 because JS months are 0-indexed
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return format(new Date(), "yyyy-MM-dd");
+  }
 }
 
 // Convert a database date string to a JavaScript Date object 
 // This ensures consistent parsing regardless of timezone
-export function dbStringToDate(dateString: string): Date {
-  // Handle ISO format strings that might come from API or direct DB access
-  if (dateString.includes("T")) {
-    return parseISO(dateString)
+export function dbStringToDate(dateString: string | null | undefined): Date {
+  // If dateString is null or undefined, return the current date
+  if (!dateString) {
+    return new Date();
   }
-  
-  // Handle YYYY-MM-DD format (what we store in the database)
-  // By appending T00:00:00 we ensure it's parsed at midnight in local timezone
-  return parseISO(`${dateString}T00:00:00`)
+
+  try {
+    // Handle ISO format strings that might come from API or direct DB access
+    if (dateString.includes("T")) {
+      // Parse ISO string but preserve the date part only - avoids timezone shifts
+      const dateParts = dateString.split('T')[0].split('-');
+      const year = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+      const day = parseInt(dateParts[2], 10);
+      
+      // Create date at local noon to ensure consistent display
+      const result = new Date();
+      result.setFullYear(year, month, day);
+      result.setHours(12, 0, 0, 0);
+      return result;
+    }
+    
+    // Handle YYYY-MM-DD format (what we store in the database)
+    // Parse directly from components to avoid timezone issues
+    const dateParts = dateString.split('-');
+    const year = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(dateParts[2], 10);
+    
+    // Create date at local noon to ensure consistent display
+    const result = new Date();
+    result.setFullYear(year, month, day);
+    result.setHours(12, 0, 0, 0);
+    return result;
+  } catch (error) {
+    console.error('Error parsing date:', dateString, error);
+    return new Date();
+  }
 }
 
 // Format a date string for display

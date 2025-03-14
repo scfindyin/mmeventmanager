@@ -17,7 +17,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   console.log(`PUT /api/events/${params.id} - Starting`)
 
   try {
-    const id = params.id
+    const { id } = params
     const eventData = await request.json()
 
     console.log(`Updating event ${id} with data:`, eventData)
@@ -68,7 +68,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const id = params.id
+    const { id } = params
 
     console.log(`Deleting event ${id}`)
 
@@ -89,7 +89,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const id = params.id
+    const { id } = params
 
     // Fetch the event using the admin client (bypasses RLS)
     const { data: event, error: eventError } = await supabaseAdmin
@@ -136,6 +136,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         id: item.id,
         event_id: item.event_id,
         topic: item.topic,
+        description: item.description,
         durationMinutes: item.duration_minutes,
         dayIndex: item.day_index,
         order: item.order_position,

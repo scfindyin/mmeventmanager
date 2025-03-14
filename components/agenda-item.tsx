@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Edit, Trash2, GripVertical } from "lucide-react"
 import { type AgendaItem as AgendaItemType } from "@/lib/types"
 import { Separator } from "@/components/ui/separator"
+import { FixDescriptionButton } from "@/components/fix-description-button"
+import { TestSaveButton } from "@/components/test-save-button"
 
 interface AgendaItemProps {
   item: AgendaItemType
@@ -28,6 +30,20 @@ export function AgendaItem({
   onMoveTop,
   onMoveBottom
 }: AgendaItemProps) {
+  // Function to format duration in hours and minutes
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (hours === 0) {
+      return `${remainingMinutes} min`;
+    } else if (remainingMinutes === 0) {
+      return `${hours} hr`;
+    } else {
+      return `${hours} hr ${remainingMinutes} min`;
+    }
+  };
+
   return (
     <Card className="relative">
       <div
@@ -42,7 +58,7 @@ export function AgendaItem({
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-medium">{item.topic}</h3>
-              <div className="text-sm text-muted-foreground">({item.durationMinutes} min)</div>
+              <div className="text-sm text-muted-foreground">({formatDuration(item.durationMinutes)})</div>
             </div>
 
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -56,6 +72,32 @@ export function AgendaItem({
                 {item.description}
               </div>
             )}
+            
+            {/* Replace the existing debug section with our full diagnostics */}
+            <div className="mt-2 text-xs text-muted-foreground border-t border-dashed pt-2">
+              <details className="cursor-pointer">
+                <summary className="font-semibold text-muted-foreground">Diagnostics</summary>
+                <div className="flex flex-col mt-2 gap-3">
+                  <div>
+                    <h4 className="text-xs mb-1 font-medium">Force Update</h4>
+                    <FixDescriptionButton 
+                      itemId={item.id} 
+                      description={item.description || ''} 
+                    />
+                  </div>
+                  <div>
+                    <h4 className="text-xs mb-1 font-medium">Test Direct Save</h4>
+                    <TestSaveButton itemId={item.id} />
+                  </div>
+                  <div className="mt-2">
+                    <h4 className="text-xs mb-1 font-medium">Item Data</h4>
+                    <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-40">
+                      {JSON.stringify(item, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </details>
+            </div>
           </div>
 
           <div className="flex items-start gap-2">

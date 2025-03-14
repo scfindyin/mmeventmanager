@@ -76,11 +76,15 @@ async function createTablesWithDirectSQL() {
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         event_id UUID REFERENCES public.events(id) ON DELETE CASCADE NOT NULL,
         topic TEXT NOT NULL,
-        duration INTEGER NOT NULL,
+        description TEXT,
+        duration_minutes INTEGER NOT NULL,
         day_index INTEGER NOT NULL,
-        position INTEGER NOT NULL,
+        order_position INTEGER NOT NULL,
         start_time TEXT,
-        end_time TEXT
+        end_time TEXT,
+        sub_items TEXT[] DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now())
       );
       
       -- Create sub_items table
@@ -98,6 +102,27 @@ async function createTablesWithDirectSQL() {
         name TEXT NOT NULL,
         email TEXT
       );
+      
+      -- Create update description function
+      CREATE OR REPLACE FUNCTION update_agenda_item_description(
+        item_id UUID,
+        new_description TEXT,
+        new_topic TEXT,
+        new_duration INTEGER
+      )
+      RETURNS BOOLEAN AS $$
+      BEGIN
+        UPDATE public.agenda_items
+        SET 
+          description = new_description,
+          topic = new_topic,
+          duration_minutes = new_duration,
+          updated_at = timezone('utc', now())
+        WHERE id = item_id;
+        
+        RETURN FOUND;
+      END;
+      $$ LANGUAGE plpgsql;
     `
   })
 }
@@ -164,6 +189,16 @@ async function createTablesWithRPC() {
       await createAttendeesTable()
     }
   }
+
+  // Also create the update description function
+  try {
+    const result = await createUpdateDescriptionFunction()
+    if (!result.success) {
+      console.error("Failed to create update_agenda_item_description function:", result.error)
+    }
+  } catch (error) {
+    console.error("Error creating update description function:", error)
+  }
 }
 
 // Helper functions to create tables using _sql_queries
@@ -205,6 +240,7 @@ async function createAgendaItemsTable() {
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         event_id UUID REFERENCES public.events(id) ON DELETE CASCADE NOT NULL,
         topic TEXT NOT NULL,
+        description TEXT,
         duration_minutes INTEGER NOT NULL,
         day_index INTEGER NOT NULL,
         order_position INTEGER NOT NULL,
@@ -273,6 +309,48 @@ async function createAttendeesTable() {
   if (error) {
     console.error("Error creating attendees table:", error)
     throw error
+  }
+}
+
+export async function createUpdateDescriptionFunction() {
+  try {
+    const { error } = await supabase.from("_sql_queries").insert({
+      name: "create_update_description_function",
+      query: `
+        CREATE OR REPLACE FUNCTION update_agenda_item_description(
+          item_id UUID,
+          new_description TEXT,
+          new_topic TEXT,
+          new_duration INTEGER
+        )
+        RETURNS BOOLEAN AS $$
+        BEGIN
+          UPDATE public.agenda_items
+          SET 
+            description = new_description,
+            topic = new_topic,
+            duration_minutes = new_duration,
+            updated_at = timezone('utc', now())
+          WHERE id = item_id;
+          
+          RETURN FOUND;
+        END;
+        $$ LANGUAGE plpgsql;
+      `,
+    })
+
+    if (error) {
+      console.error("Error creating update_agenda_item_description function:", error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to create update_agenda_item_description function:", error)
+    return { 
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
   }
 }
 

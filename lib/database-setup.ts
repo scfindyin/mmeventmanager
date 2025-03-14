@@ -111,9 +111,10 @@ export async function setupDatabase() {
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             event_id UUID REFERENCES public.events(id) ON DELETE CASCADE NOT NULL,
             topic TEXT NOT NULL,
-            duration INTEGER NOT NULL,
+            description TEXT,
+            duration_minutes INTEGER NOT NULL,
             day_index INTEGER NOT NULL,
-            position INTEGER NOT NULL,
+            order_position INTEGER NOT NULL,
             start_time TEXT,
             end_time TEXT
           );

@@ -1,0 +1,84 @@
+/* Date picker specific styles */
+.date-picker-calendar :global(.rdp) {
+  margin: 0;
+}
+
+.date-picker-calendar :global(.rdp-months) {
+  display: flex;
+  justify-content: center;
+}
+
+.date-picker-calendar :global(.rdp-month) {
+  background-color: hsl(var(--background));
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.date-picker-calendar :global(.rdp-day) {
+  width: 40px !important;
+  height: 40px !important;
+  transition: all 0.2s;
+  border-radius: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.date-picker-calendar :global(.rdp-button) {
+  width: 40px;
+  height: 40px;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-picker-calendar :global(.rdp-day_selected), 
+.date-picker-calendar :global(.rdp-day_selected:hover) {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-weight: 500;
+}
+
+.date-picker-calendar :global(.rdp-head_cell) {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  font-size: 0.875rem;
+  padding: 10px 0;
+}
+
+.date-picker-calendar :global(.rdp-day:hover) {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.date-picker-calendar :global(.rdp-day_today) {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.date-picker-calendar :global(.rdp-table) {
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+.date-picker-calendar :global(.rdp-caption) {
+  padding: 0 0 16px 0;
+}
+
+.date-picker-calendar :global(.rdp-nav) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Set root variables for day-picker */
+.date-picker-calendar :global(.rdp-root) {
+  --rdp-day-width: 40px;
+  --rdp-day-height: 40px;
+  --rdp-day_button-width: 40px;
+  --rdp-day_button-height: 40px;
+  --rdp-day_button-border-radius: 0.5rem;
+} 

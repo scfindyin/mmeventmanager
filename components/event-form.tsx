@@ -1,75 +1,50 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { X, Upload, AlertTriangle, Bug, ChevronLeft, ChevronRight } from "lucide-react"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CalendarIcon, Upload, X } from "lucide-react"
 import type { Event } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
-import { AttendeeList } from "@/components/attendee-list"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import Image from "next/image"
-import { DebugImage } from "@/components/debug-image"
 import { ErrorDialog } from "@/components/error-dialog"
-import { CustomDatePicker } from "@/components/custom-date-picker"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
-import { dateToDbString, dbStringToDate, isValidDateString, formatDateForInput, formatTimeForInput } from "@/lib/utils"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { dateUtils } from "@/lib/types"
-import { StyledDateRangePicker } from "@/components/styled-date-range-picker";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { format } from "date-fns"
+import { dateToDbString, dbStringToDate } from "@/lib/utils"
+import Image from "next/image"
+import { ClientDayPicker } from '@/components/ClientDayPicker'
+import BasicTimePicker from '@/components/BasicTimePicker'
 
-const formSchema = z
-  .object({
-    title: z.string().min(2, "Title must be at least 2 characters"),
-    subtitle: z.string().optional(),
-    notes: z.string().optional(),
-    start_date: z.date({
-      required_error: "Start date is required",
-      invalid_type_error: "Start date must be a valid date",
-    }),
-    end_date: z.date({
-      required_error: "End date is required",
-      invalid_type_error: "End date must be a valid date",
-    }),
-    start_time: z.string().min(1, "Start time is required"),
-    end_time: z.string().min(1, "Start time is required"),
-    logo_url: z.string().optional(),
-  })
-  .refine(
-    (data) => {
-      return data.end_date >= data.start_date
-    },
-    {
-      message: "End date must be after or equal to start date",
-      path: ["end_date"],
-    },
-  )
+const formSchema = z.object({
+  title: z.string().min(2, "Title must be at least 2 characters"),
+  subtitle: z.string().optional(),
+  notes: z.string().optional(),
+  start_date: z.date({
+    required_error: "Start date is required",
+    invalid_type_error: "Start date must be a valid date",
+  }),
+  end_date: z.date({
+    required_error: "End date is required",
+    invalid_type_error: "End date must be a valid date",
+  }),
+  start_time: z.string().min(1, "Start time is required"),
+  end_time: z.string().min(1, "End time is required"),
+  logo_url: z.string().optional(),
+}).refine(
+  (data) => {
+    return data.end_date >= data.start_date
+  },
+  {
+    message: "End date must be after or equal to start date",
+    path: ["end_date"],
+  },
+)
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -82,39 +57,47 @@ export function EventForm({ event, onClose }: EventFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(event?.logo_url || null)
-  const [rlsError, setRlsError] = useState<string | null>(null)
-  const { toast } = useToast()
   const [saveError, setSaveError] = useState<Error | string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string[]>([])
-  const [showDebug, setShowDebug] = useState(false)
-  const [debugLog, setDebugLog] = useState<string[]>([])
+  const { toast } = useToast()
 
-  // Simple debug logging function
-  const logDebug = (message: string) => {
-    console.log(`[DEBUG] ${message}`)
-    setDebugLog((prev) => [...prev, `${new Date().toISOString().slice(11, 19)} - ${message}`])
-  }
+  // Type assertion to handle the snake_case field names from API
+  // This tells TypeScript that the Event might have these additional properties
+  const apiEvent = event as unknown as {
+    id?: string;
+    title: string;
+    subtitle?: string;
+    notes?: string;
+    start_date?: string;
+    end_date?: string;
+    start_time?: string;
+    end_time?: string;
+    logo_url?: string;
+  } | null;
 
-  // Parse dates carefully to ensure they're valid
-  const parseEventDate = (dateStr: string): Date => {
-    try {
-      return dateUtils.parseDate(dateStr);
-    } catch (error) {
-      logDebug(`Error parsing date: ${error}`)
-      return new Date();
+  // Use the start_date and end_date from the actual API response
+  let safeStartDate = new Date();
+  let safeEndDate = new Date();
+  
+  if (apiEvent) {
+    // Use the actual snake_case field names from the API response
+    if (apiEvent.start_date) {
+      safeStartDate = dbStringToDate(apiEvent.start_date);
+    }
+    if (apiEvent.end_date) {
+      safeEndDate = dbStringToDate(apiEvent.end_date);
     }
   }
 
   const defaultValues: Partial<FormValues> = event
     ? {
-        title: event.title,
-        subtitle: event.subtitle || "",
-        notes: event.notes || "",
-        start_date: parseEventDate(event.start_date),
-        end_date: parseEventDate(event.end_date),
-        start_time: formatTimeForInput(event.start_time) || "09:00",
-        end_time: formatTimeForInput(event.end_time) || "17:00",
-        logo_url: event.logo_url || "",
+        title: apiEvent?.title || "",
+        subtitle: apiEvent?.subtitle || "",
+        notes: apiEvent?.notes || "",
+        start_date: safeStartDate,
+        end_date: safeEndDate,
+        start_time: apiEvent?.start_time?.substring(0, 5) || "08:00",
+        end_time: apiEvent?.end_time?.substring(0, 5) || "17:00",
+        logo_url: apiEvent?.logo_url || "",
       }
     : {
         title: "",
@@ -122,7 +105,7 @@ export function EventForm({ event, onClose }: EventFormProps) {
         notes: "",
         start_date: new Date(),
         end_date: new Date(),
-        start_time: "09:00",
+        start_time: "08:00",
         end_time: "17:00",
         logo_url: "",
       }
@@ -131,6 +114,32 @@ export function EventForm({ event, onClose }: EventFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues,
   })
+
+  // Watch the start_time field to update the end_time field
+  const startTime = form.watch("start_time");
+  
+  // When start_time changes, adjust end_time if needed
+  useEffect(() => {
+    const currentEndTime = form.getValues("end_time");
+    
+    // If end time is earlier than start time, set it to start time
+    const [startHours, startMinutes] = startTime.split(":").map(Number);
+    const [endHours, endMinutes] = currentEndTime.split(":").map(Number);
+    
+    if (
+      startHours > endHours || 
+      (startHours === endHours && startMinutes >= endMinutes)
+    ) {
+      // Set end time 1 hour after start time
+      let newEndHours = startHours + 1;
+      if (newEndHours >= 24) {
+        newEndHours = 23;
+        form.setValue("end_time", `${newEndHours.toString().padStart(2, "0")}:${startMinutes.toString().padStart(2, "0")}`);
+      } else {
+        form.setValue("end_time", `${newEndHours.toString().padStart(2, "0")}:${startMinutes.toString().padStart(2, "0")}`);
+      }
+    }
+  }, [startTime, form]);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -147,214 +156,73 @@ export function EventForm({ event, onClose }: EventFormProps) {
   }
 
   async function uploadLogo(file: File): Promise<string> {
-    try {
-      logDebug("Starting logo upload process")
+    const formData = new FormData()
+    formData.append("file", file)
 
-      const formData = new FormData()
-      formData.append("file", file)
+    const response = await fetch("/api/upload-simple", {
+      method: "POST",
+      body: formData,
+    })
 
-      logDebug("Sending request to /api/upload-simple")
-      const response = await fetch("/api/upload-simple", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Upload failed")
-      }
-
-      const result = await response.json()
-      logDebug(`Upload response received`)
-
-      if (!result.publicUrl) {
-        throw new Error("No public URL returned from upload")
-      }
-
-      // Add a cache-busting query parameter
-      const publicUrl = `${result.publicUrl}?v=${Date.now()}`
-      logDebug(`Final public URL created`)
-
-      return publicUrl
-    } catch (error) {
-      logDebug(`Logo upload failed: ${error instanceof Error ? error.message : String(error)}`)
-      throw new Error(`Logo upload failed: ${error instanceof Error ? error.message : String(error)}`)
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || "Upload failed")
     }
-  }
 
-  // Direct SQL save function
-  async function saveWithDirectSQL() {
-    try {
-      setIsSubmitting(true)
-      setSaveError(null)
-      logDebug("Attempting to save with direct SQL")
-
-      const formData = form.getValues()
-
-      // Format dates consistently for SQL using our utility function
-      const startDateStr = dateUtils.toISODateString(formData.start_date);
-      const endDateStr = dateUtils.toISODateString(formData.end_date);
-
-      logDebug(`Formatted dates for SQL: start=${startDateStr}, end=${endDateStr}`)
-
-      const eventData = {
-        title: formData.title,
-        subtitle: formData.subtitle || null,
-        notes: formData.notes || null,
-        start_date: startDateStr,
-        end_date: endDateStr,
-        start_time: formData.start_time,
-        end_time: formData.end_time,
-      }
-
-      logDebug(`Direct SQL event data prepared`)
-
-      // Using direct API endpoint to save data
-      const url = event?.id
-        ? `/api/events/${event.id}` // Update existing event
-        : "/api/events" // Create new event
-
-      logDebug(`Making ${event?.id ? "PUT" : "POST"} request to ${url}`)
-
-      const response = await fetch(url, {
-        method: event?.id ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(eventData),
-      })
-
-      const result = await response.json()
-      logDebug(`API response received`)
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to save event")
-      }
-
-      toast({
-        title: event?.id ? "Event updated" : "Event created",
-        description: "Your event has been saved successfully using direct SQL.",
-      })
-
-      // Close the form after successful save
-      setTimeout(() => {
-        onClose()
-      }, 500)
-    } catch (error: any) {
-      logDebug(`Direct SQL error: ${error instanceof Error ? error.message : String(error)}`)
-      setSaveError(error)
-    } finally {
-      setIsSubmitting(false)
-    }
+    const result = await response.json()
+    return result.publicUrl
   }
 
   async function onSubmit(data: FormValues) {
     try {
       setIsSubmitting(true)
-      setRlsError(null)
-      setSaveError(null)
-
-      logDebug(`Form submission started`)
-      logDebug(`Start date: ${data.start_date.toISOString()}`)
-      logDebug(`End date: ${data.end_date.toISOString()}`)
-
-      // Upload logo if a new one was selected
+      
+      // Handle logo upload if there's a new file
       let logoUrl = data.logo_url
       if (logoFile) {
-        try {
-          logDebug("Attempting to upload logo")
-          logoUrl = await uploadLogo(logoFile)
-          logDebug(`Logo uploaded successfully`)
-        } catch (logoError) {
-          logDebug(`Logo upload error`)
-          toast({
-            title: "Logo upload failed",
-            description:
-              "Continuing to save event without logo. Error: " +
-              (logoError instanceof Error ? logoError.message : String(logoError)),
-            variant: "destructive",
-          })
-          // Continue without the logo
-          logoUrl = ""
-        }
+        logoUrl = await uploadLogo(logoFile)
       }
 
-      // Format dates consistently for API using our utility function
-      const startDateStr = dateUtils.toISODateString(data.start_date)
-      const endDateStr = dateUtils.toISODateString(data.end_date)
+      // Format start and end dates as ISO strings for API
+      const startDateStr = dateToDbString(data.start_date);
+      const endDateStr = dateToDbString(data.end_date);
 
-      logDebug(`Formatted dates for API: start=${startDateStr}, end=${endDateStr}`)
-
+      // Prepare the event data - match the expected API format
       const eventData = {
         title: data.title,
-        subtitle: data.subtitle || null,
-        notes: data.notes || null,
+        subtitle: data.subtitle,
+        notes: data.notes,
         start_date: startDateStr,
         end_date: endDateStr,
         start_time: data.start_time,
         end_time: data.end_time,
-        logo_url: logoUrl || null,
+        logo_url: logoUrl,
       }
 
-      logDebug(`Event data prepared: ${JSON.stringify(eventData)}`)
+      // API call would go here
+      const url = event?.id ? `/api/events/${event.id}` : '/api/events'
+      const method = event?.id ? 'PUT' : 'POST'
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      })
 
-      // Try to save the event data
-      try {
-        const url = event?.id
-          ? `/api/events/${event.id}` // Update existing event
-          : "/api/events" // Create new event
-
-        logDebug(`Making ${event?.id ? "PUT" : "POST"} request to ${url}`)
-
-        const response = await fetch(url, {
-          method: event?.id ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(eventData),
-        })
-
-        logDebug(`Response received with status: ${response.status}`)
-
-        const responseData = await response.json()
-
-        if (!response.ok) {
-          const errorMessage = responseData.error || "Failed to save event"
-          logDebug(`Error response: ${errorMessage}`)
-          throw new Error(errorMessage)
-        }
-
-        logDebug("Save successful")
-        toast({
-          title: event?.id ? "Event updated" : "Event created",
-          description: event?.id
-            ? "Your event has been updated successfully."
-            : "Your new event has been created successfully.",
-        })
-
-        // Close the form after successful save
-        setTimeout(() => {
-          onClose()
-        }, 500)
-      } catch (error: any) {
-        logDebug(`API error: ${error instanceof Error ? error.message : String(error)}`)
-        throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to save event")
       }
+
+      toast({
+        title: "Event saved",
+        description: "Your event has been saved successfully."
+      })
+      onClose()
     } catch (error: any) {
-      logDebug(`Error saving event: ${error instanceof Error ? error.message : String(error)}`)
-
-      // Check if it's an RLS error
-      if (
-        error.message &&
-        (error.message.includes("row-level security") ||
-          error.message.includes("permission denied") ||
-          error.message.includes("policy"))
-      ) {
-        setRlsError("Row Level Security is preventing database operations. Please check your Supabase RLS policies.")
-      } else {
-        // Set the error for the dialog
-        setSaveError(error)
-      }
+      setSaveError(error)
     } finally {
       setIsSubmitting(false)
     }
@@ -369,452 +237,207 @@ export function EventForm({ event, onClose }: EventFormProps) {
             {event?.id ? "Update your event details" : "Enter the details for your new event"}
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setShowDebug(!showDebug)} title="Debug Info">
-            <Bug className="h-4 w-4" />
-            <span className="sr-only">Debug</span>
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
-        </div>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </Button>
       </CardHeader>
-
-      {rlsError && (
-        <div className="px-6 pb-2">
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Security Policy Error</AlertTitle>
-            <AlertDescription>
-              {rlsError}
-              <div className="mt-2">
-                <p className="text-sm font-medium">To fix this issue:</p>
-                <ol className="list-decimal pl-5 text-sm mt-1 space-y-1">
-                  <li>Go to your Supabase dashboard</li>
-                  <li>Navigate to Authentication → Policies</li>
-                  <li>Find the "events" table</li>
-                  <li>Click "Disable RLS" button at the top of the page</li>
-                  <li>Repeat for all tables: events, agenda_items, sub_items, and attendees</li>
-                </ol>
-                <div className="mt-4 p-3 bg-muted rounded-md">
-                  <p className="text-sm font-medium mb-2">SQL to disable RLS (run in SQL Editor):</p>
-                  <pre className="text-xs overflow-auto whitespace-pre-wrap">
-                    {`ALTER TABLE public.events DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.agenda_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sub_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.attendees DISABLE ROW LEVEL SECURITY;`}
-                  </pre>
-                </div>
-              </div>
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col items-center mb-4">
-              {logoPreview ? (
-                <div className="relative w-48 h-24 mb-4">
-                  {logoPreview.startsWith("data:") ? (
-                    <Image
-                      src={logoPreview || "/placeholder.svg"}
-                      alt="Event logo preview"
-                      fill
-                      className="object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-full relative">
-                      <img
-                        src={`${logoPreview}?v=${Date.now()}`}
-                        alt="Event logo"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          console.error("Image failed to load:", logoPreview)
-                          ;(e.target as HTMLImageElement).style.display = "none"
-                        }}
-                      />
-                    </div>
+      
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Event title" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="subtitle"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Subtitle</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Event subtitle (optional)" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <FormField
+                      control={form.control}
+                      name="start_date"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>Start Date</FormLabel>
+                          <ClientDayPicker
+                            initialDate={field.value}
+                            onChange={(date) => field.onChange(date)}
+                            label=""
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <FormField
+                      control={form.control}
+                      name="end_date"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>End Date</FormLabel>
+                          <ClientDayPicker
+                            initialDate={field.value}
+                            onChange={(date) => field.onChange(date)}
+                            label=""
+                            minDate={form.getValues("start_date")}
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
-              ) : (
-                <div className="w-48 h-24 border-2 border-dashed rounded-md flex items-center justify-center mb-4 text-muted-foreground">
-                  No logo
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Input type="file" id="logo" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                <Button type="button" variant="outline" onClick={() => document.getElementById("logo")?.click()}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  {logoPreview ? "Change Logo" : "Upload Logo"}
-                </Button>
-                {logoPreview && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setLogoPreview(null)
-                      setLogoFile(null)
-                      form.setValue("logo_url", "")
-                    }}
-                  >
-                    Remove Logo
-                  </Button>
-                )}
-              </div>
-            </div>
 
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Event title" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="subtitle"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Subtitle (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Secondary title" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-1 gap-4">
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter event notes (optional)"
-                        className="resize-none"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <FormField
+                      control={form.control}
+                      name="start_time"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>Start Time</FormLabel>
+                          <FormControl>
+                            <BasicTimePicker 
+                              value={field.value} 
+                              onChange={field.onChange}
+                              label="" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <FormField
+                      control={form.control}
+                      name="end_time"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>End Time</FormLabel>
+                          <FormControl>
+                            <BasicTimePicker 
+                              value={field.value} 
+                              onChange={field.onChange}
+                              label="" 
+                              minTime={form.getValues("start_time")}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Additional notes (optional)" className="min-h-[120px]" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="w-64 space-y-4">
+                <FormField
+                  control={form.control}
+                  name="logo_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Logo</FormLabel>
+                      <FormDescription>
+                        {logoPreview ? "Click on logo to replace it" : "Upload your event logo (optional)"}
+                      </FormDescription>
+                      <FormControl>
+                        <div className="space-y-4">
+                          <label 
+                            className="border rounded-md p-4 flex items-center justify-center bg-muted/50 h-40 cursor-pointer"
+                            htmlFor="logo-upload"
+                          >
+                            {logoPreview ? (
+                              <div className="relative w-full h-full">
+                                <Image 
+                                  src={logoPreview} 
+                                  alt="Logo preview" 
+                                  fill
+                                  className="object-contain"
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
+                                  <span className="text-transparent hover:text-white font-medium">Change</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-muted-foreground text-center">
+                                <Upload className="h-8 w-8 mx-auto mb-2" />
+                                <p>Click to upload logo</p>
+                              </div>
+                            )}
+                          </label>
+                          <Input
+                            id="logo-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoChange}
+                            className="hidden"
+                          />
+                          <input type="hidden" {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
             
-            {/* Date/Time Section with separate pickers */}
-<div className="space-y-4">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {/* Start Date Picker */}
-    <FormField
-      control={form.control}
-      name="start_date"
-      render={({ field }) => {
-        const [open, setOpen] = useState(false);
-        return (
-        <FormItem className="flex flex-col">
-          <FormLabel>Start Date</FormLabel>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <FormControl>
-                <Button
-                  variant="outline"
-                  className="w-full pl-3 text-left font-normal"
-                >
-                  {field.value ? (
-                    format(field.value, "MMMM d, yyyy")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
-                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                </Button>
-              </FormControl>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <div className="p-0">
-                <div className="flex justify-center items-center gap-4 py-2">
-                  <button 
-                    onClick={() => {
-                      const currentMonth = field.value || new Date();
-                      const prev = new Date(currentMonth);
-                      prev.setMonth(prev.getMonth() - 1);
-                      field.onChange(prev);
-                    }}
-                    className="h-7 w-7 inline-flex items-center justify-center hover:bg-muted rounded-sm"
-                    type="button"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <div className="font-bold text-lg">
-                    {format(field.value || new Date(), "MMMM yyyy")}
-                  </div>
-                  <button
-                    onClick={() => {
-                      const currentMonth = field.value || new Date();
-                      const next = new Date(currentMonth);
-                      next.setMonth(next.getMonth() + 1);
-                      field.onChange(next);
-                    }}
-                    className="h-7 w-7 inline-flex items-center justify-center hover:bg-muted rounded-sm"
-                    type="button"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-                
-                <Calendar
-                  mode="single"
-                  selected={field.value}
-                  onSelect={(date) => {
-                    field.onChange(date);
-                    setOpen(false);
-                  }}
-                  initialFocus
-                  classNames={{
-                    caption: "hidden",
-                    nav: "hidden",
-                    head_cell: "text-muted-foreground font-normal text-[0.8rem]",
-                    cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                    day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
-                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                    day_today: "bg-accent text-accent-foreground",
-                    day_outside: "text-muted-foreground opacity-50",
-                    day_disabled: "text-muted-foreground opacity-50",
-                    day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
-                    day_hidden: "invisible",
-                    table: "w-full border-collapse space-y-1"
-                  }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
-          <FormMessage />
-        </FormItem>
-        )
-      }}
-    />
-
-    {/* End Date Picker */}
-    <FormField
-      control={form.control}
-      name="end_date"
-      render={({ field }) => {
-        const [open, setOpen] = useState(false);
-        return (
-        <FormItem className="flex flex-col">
-          <FormLabel>End Date</FormLabel>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <FormControl>
-                <Button
-                  variant="outline"
-                  className="w-full pl-3 text-left font-normal"
-                >
-                  {field.value ? (
-                    format(field.value, "MMMM d, yyyy")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
-                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                </Button>
-              </FormControl>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <div className="p-0">
-                <div className="flex justify-center items-center gap-4 py-2">
-                  <button 
-                    onClick={() => {
-                      const currentMonth = field.value || new Date();
-                      const prev = new Date(currentMonth);
-                      prev.setMonth(prev.getMonth() - 1);
-                      field.onChange(prev);
-                    }}
-                    className="h-7 w-7 inline-flex items-center justify-center hover:bg-muted rounded-sm"
-                    type="button"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <div className="font-bold text-lg">
-                    {format(field.value || new Date(), "MMMM yyyy")}
-                  </div>
-                  <button
-                    onClick={() => {
-                      const currentMonth = field.value || new Date();
-                      const next = new Date(currentMonth);
-                      next.setMonth(next.getMonth() + 1);
-                      field.onChange(next);
-                    }}
-                    className="h-7 w-7 inline-flex items-center justify-center hover:bg-muted rounded-sm"
-                    type="button"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-                
-                <Calendar
-                  mode="single"
-                  selected={field.value}
-                  onSelect={(date) => {
-                    field.onChange(date);
-                    setOpen(false);
-                  }}
-                  initialFocus
-                  classNames={{
-                    caption: "hidden",
-                    nav: "hidden",
-                    head_cell: "text-muted-foreground font-normal text-[0.8rem]",
-                    cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                    day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
-                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                    day_today: "bg-accent text-accent-foreground",
-                    day_outside: "text-muted-foreground opacity-50",
-                    day_disabled: "text-muted-foreground opacity-50",
-                    day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
-                    day_hidden: "invisible",
-                    table: "w-full border-collapse space-y-1"
-                  }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
-          <FormMessage />
-        </FormItem>
-        )
-      }}
-    />
-
-    {/* Start Time Dropdown */}
-    <FormField
-      control={form.control}
-      name="start_time"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>Start Time</FormLabel>
-          <Select
-            onValueChange={field.onChange}
-            defaultValue={field.value}
-          >
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder="Select start time" />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {Array.from({ length: 96 }, (_, i) => {
-                const hours = Math.floor(i / 4);
-                const minutes = (i % 4) * 15;
-                const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                return (
-                  <SelectItem key={timeString} value={timeString}>
-                    {hours === 0 ? '12' : hours > 12 ? hours - 12 : hours}:{minutes.toString().padStart(2, '0')} {hours >= 12 ? 'PM' : 'AM'}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-
-    {/* End Time Dropdown */}
-    <FormField
-      control={form.control}
-      name="end_time"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>End Time</FormLabel>
-          <Select
-            onValueChange={field.onChange}
-            defaultValue={field.value}
-          >
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder="Select end time" />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {Array.from({ length: 96 }, (_, i) => {
-                const hours = Math.floor(i / 4);
-                const minutes = (i % 4) * 15;
-                const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                return (
-                  <SelectItem key={timeString} value={timeString}>
-                    {hours === 0 ? '12' : hours > 12 ? hours - 12 : hours}:{minutes.toString().padStart(2, '0')} {hours >= 12 ? 'PM' : 'AM'}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  </div>
-</div>
-
-            {event?.id && (
-              <div className="pt-4">
-                <h3 className="text-lg font-medium mb-2">Attendees</h3>
-                <AttendeeList eventId={event.id} />
-              </div>
-            )}
-            {logoPreview && !logoPreview.startsWith("data:") && <DebugImage imageUrl={logoPreview} />}
-          </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button variant="outline" type="button" onClick={onClose}>
-              Cancel
-            </Button>
-            <div className="flex gap-2">
+            <div className="flex justify-between pt-4">
+              <Button variant="outline" type="button" onClick={onClose}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save"}
+                {isSubmitting ? "Saving..." : event?.id ? "Update Event" : "Create Event"}
               </Button>
             </div>
-          </CardFooter>
-        </form>
-      </Form>
-
+          </form>
+        </Form>
+      </CardContent>
+      
       <ErrorDialog title="Save Error" error={saveError} onClose={() => setSaveError(null)} />
-
-      <Dialog open={showDebug} onOpenChange={setShowDebug}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bug className="h-5 w-5" />
-              Debug Information
-            </DialogTitle>
-            <DialogDescription>Detailed logs of the save operation</DialogDescription>
-          </DialogHeader>
-
-          <div className="bg-muted p-3 rounded-md text-sm font-mono overflow-auto max-h-[400px]">
-            {debugInfo.length === 0 ? (
-              <p className="text-muted-foreground">No debug information available yet</p>
-            ) : (
-              debugInfo.map((log, index) => (
-                <div key={index} className="py-1">
-                  {log}
-                </div>
-              ))
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button onClick={() => setShowDebug(false)}>Close Debug</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   )
 }
+
 

@@ -186,18 +186,55 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
           id: item.id,
           event_id: eventId,
           topic: item.topic,
+          description: item.description,
           duration_minutes: item.durationMinutes,
           day_index: item.dayIndex,
           order_position: item.order,
           start_time: item.startTime,
           end_time: item.endTime,
-          sub_items: item.subItems
         })
 
       if (error) throw error
 
-      // Refresh the agenda items
-      fetchEventAndAgenda()
+      // Get all items for this event
+      const { data: allItems, error: fetchError } = await supabase
+        .from("agenda_items")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("day_index", { ascending: true })
+        .order("order_position", { ascending: true })
+
+      if (fetchError) throw fetchError
+
+      // Convert to AgendaItem format
+      const formattedItems: AgendaItem[] = allItems.map((dbItem) => ({
+        id: dbItem.id as string,
+        event_id: dbItem.event_id as string,
+        topic: dbItem.topic as string,
+        description: dbItem.description as string | undefined,
+        durationMinutes: dbItem.duration_minutes as number,
+        dayIndex: dbItem.day_index as number,
+        order: dbItem.order_position as number,
+        startTime: dbItem.start_time as string || "",
+        endTime: dbItem.end_time as string || "",
+      }))
+
+      // Recalculate times for all items
+      const recalculatedItems = calculateAgendaTimes(formattedItems)
+      
+      // Update the start/end times in the database
+      for (const updatedItem of recalculatedItems) {
+        await supabase
+          .from("agenda_items")
+          .update({
+            start_time: updatedItem.startTime,
+            end_time: updatedItem.endTime,
+          })
+          .eq("id", updatedItem.id)
+      }
+
+      // Update the UI
+      setAgendaItems(recalculatedItems)
       
       toast({
         title: item.id.startsWith('temp-') ? "Item added" : "Item updated",

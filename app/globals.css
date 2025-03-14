@@ -75,27 +75,8 @@
   }
 }
 
-/* Style selected dates with black background */
-.rdp-day_selected,
-.rdp-day_range_start,
-.rdp-day_range_end {
-  background-color: black !important;
-  color: white !important;
-  border-radius: 9999px !important;
-}
-
-/* Style dates in the middle of a range */
-.rdp-day_range_middle {
-  background-color: rgba(0, 0, 0, 0.1) !important;
-  color: inherit !important;
-}
-
-/* Style the day cells for better spacing */
-.rdp-day {
-  width: 36px !important;
-  height: 36px !important;
-  font-size: 14px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
+/* 
+  Custom styles removed to allow shadcn date picker styles to work correctly
+  If you need to customize the date picker appearance, use the classNames prop 
+  in the Calendar component instead.
+*/
