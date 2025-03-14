@@ -1,6 +1,7 @@
 // components/ui/TimePicker.tsx
 import React, { useState, CSSProperties } from 'react';
 import { Clock } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 interface TimePickerProps {
   label?: string;
@@ -26,7 +27,10 @@ const TimePicker: React.FC<TimePickerProps> = ({
   increment = 30,
   minTime
 }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [isHovered, setIsHovered] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   
   // Generate time options
   const generateTimeOptions = () => {
@@ -57,72 +61,60 @@ const TimePicker: React.FC<TimePickerProps> = ({
   
   const timeOptions = generateTimeOptions();
   
-  // Styles with TypeScript type assertions
-  const styles: {
-    container: CSSProperties;
-    label: CSSProperties;
-    selectContainer: CSSProperties;
-    select: CSSProperties;
-    icon: CSSProperties;
-  } = {
-    container: {
-      marginBottom: '16px'
-    },
-    label: {
-      display: 'block',
-      fontSize: '14px',
-      fontWeight: '500',
-      marginBottom: '8px'
-    },
-    selectContainer: {
-      position: 'relative',
-      width: '100%'
-    },
-    select: {
-      width: '100%',
-      height: '40px',
-      padding: '8px 12px 8px 36px',
-      border: '1px solid #e2e8f0',
-      borderRadius: '6px',
-      appearance: 'none',
-      fontSize: '14px',
-      backgroundColor: isHovered ? '#f3f4f6' : 'white',
-      cursor: 'pointer',
-      transition: 'background-color 150ms ease'
-    },
-    icon: {
-      position: 'absolute',
-      left: '12px',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      color: '#6b7280',
-      pointerEvents: 'none'
-    }
+  // Toggle the dropdown
+  const toggleDropdown = () => {
+    setIsOpen(!isOpen);
+  };
+  
+  const selectTime = (timeValue: string) => {
+    onChange(timeValue);
+    setIsOpen(false);
   };
   
   return (
-    <div style={styles.container}>
-      <label style={styles.label}>{label}</label>
-      <div style={styles.selectContainer}>
-        <Clock size={16} style={styles.icon} />
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={styles.select}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {timeOptions.map((option) => (
-            <option 
-              key={option.value} 
-              value={option.value} 
-              disabled={option.disabled}
-            >
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="w-full relative">
+      {label && (
+        <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+          {label}
+        </label>
+      )}
+      
+      <button
+        type="button"
+        className={`flex justify-between items-center w-full border rounded-md px-3 py-2 text-left ${
+          isHovered ? (isDark ? 'bg-gray-800' : 'bg-gray-50') : (isDark ? 'bg-gray-950' : 'bg-white')
+        } ${isDark ? 'border-gray-700 text-gray-100' : 'border-gray-200'}`}
+        onClick={toggleDropdown}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <span>{formatTo12Hour(value)}</span>
+        <Clock className={`h-4 w-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+      </button>
+      
+      {isOpen && (
+        <div className={`absolute z-10 mt-1 w-full ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'} border rounded-md shadow-lg max-h-60 overflow-auto`}>
+          <div className="py-1">
+            {timeOptions.map((option) => (
+              <div
+                key={option.value}
+                className={`px-4 py-2 ${
+                  option.disabled 
+                    ? (isDark ? 'text-gray-600' : 'text-gray-300') + ' cursor-not-allowed' 
+                    : (isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100') + ' cursor-pointer'
+                } ${
+                  option.value === value 
+                    ? (isDark ? 'bg-gray-800' : 'bg-gray-100') + ' font-medium' 
+                    : ''
+                } ${isDark ? 'text-gray-100' : ''}`}
+                onClick={() => !option.disabled && selectTime(option.value)}
+              >
+                {option.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -149,26 +141,30 @@ export function TimeRangePicker({
   const handleStartTimeChange = (time: string) => {
     setStartTime(time);
     
-    // If new start time is after current end time, update end time
-    if (time >= endTime) {
-      // Add at least one increment to the start time
-      const [hours, minutes] = time.split(':').map(Number);
-      let newEndHours = hours;
-      let newEndMinutes = minutes + increment;
+    // If endTime is earlier than new startTime, adjust it
+    if (endTime < time) {
+      // Calculate a reasonable default end time (e.g., start + 1 hour)
+      const [startHour, startMinute] = time.split(':').map(Number);
+      let endHour = startHour + 1;
+      const endMinute = startMinute;
       
-      if (newEndMinutes >= 60) {
-        newEndHours = (newEndHours + 1) % 24;
-        newEndMinutes = newEndMinutes % 60;
+      // Handle day wrap
+      if (endHour >= 24) {
+        endHour = 23;
       }
       
-      const newEndTime = `${String(newEndHours).padStart(2, '0')}:${String(newEndMinutes).padStart(2, '0')}`;
+      const newEndTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
       setEndTime(newEndTime);
       
+      // Notify parent of both changes
       if (onChange) {
         onChange({ start: time, end: newEndTime });
       }
-    } else if (onChange) {
-      onChange({ start: time, end: endTime });
+    } else {
+      // Just notify of start time change
+      if (onChange) {
+        onChange({ start: time, end: endTime });
+      }
     }
   };
   
@@ -182,21 +178,26 @@ export function TimeRangePicker({
   };
   
   return (
-    <div>
-      <TimePicker
-        label="Start Time"
-        value={startTime}
-        onChange={handleStartTimeChange}
-        increment={increment}
-      />
-      
-      <TimePicker
-        label="End Time"
-        value={endTime}
-        onChange={handleEndTimeChange}
-        increment={increment}
-        minTime={startTime}
-      />
+    <div className="flex gap-4">
+      <div className="flex-1">
+        <TimePicker 
+          label="Start Time" 
+          value={startTime} 
+          onChange={handleStartTimeChange} 
+          increment={increment}
+        />
+      </div>
+      <div className="flex-1">
+        <TimePicker 
+          label="End Time" 
+          value={endTime} 
+          onChange={handleEndTimeChange} 
+          increment={increment}
+          minTime={startTime} // Disable times before start time
+        />
+      </div>
     </div>
   );
 }
+
+export default TimePicker;

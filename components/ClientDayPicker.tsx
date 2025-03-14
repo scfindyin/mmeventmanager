@@ -7,6 +7,7 @@ interface ClientDayPickerProps {
   onChange?: (date: Date) => void;
   label?: string;
   initialDate?: Date;
+  minDate?: Date;
   // Add any other props your DayPicker component accepts
 }
 

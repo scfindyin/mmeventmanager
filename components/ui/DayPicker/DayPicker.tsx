@@ -2,6 +2,7 @@
 
 // components/ui/DayPicker/DayPicker.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 
 // Helper function to format date inside the component instead of importing
 const formatDate = (date: Date): string => {
@@ -50,6 +51,9 @@ export const DayPicker: React.FC<DayPickerProps> = ({
   initialDate = new Date(),
   minDate
 }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const [date, setDate] = useState<Date>(initialDate);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [hoverStates, setHoverStates] = useState<HoverStates>({
@@ -219,33 +223,30 @@ export const DayPicker: React.FC<DayPickerProps> = ({
     weeks.push(week);
   }
   
-  // Check if a day should be disabled (before minDate)
+  // Function to determine if a day is disabled (before minDate)
   const isDisabled = (day: number | null): boolean => {
     if (day === null) return true;
+    if (!minDate) return false;
     
-    if (minDate) {
-      const checkDate = new Date(viewYear, viewMonth, day);
-      return checkDate < minDate;
-    }
-    
-    return false;
+    const testDate = new Date(viewYear, viewMonth, day);
+    return testDate < minDate;
   };
   
   // Styles with hover states
   const styles = {
     container: {
-      width: '100%', 
+      width: '100%',
+      boxSizing: 'border-box' as const,
       position: 'relative' as const
     },
     labelText: {
-      marginBottom: '8px', 
-      fontSize: '14px', 
-      fontWeight: '500'
+      marginBottom: '4px',
+      fontSize: '14px',
+      fontWeight: '500',
+      color: isDark ? '#e2e8f0' : '#64748b'
     },
     popoverContainer: {
-      position: 'relative' as const, 
-      display: 'inline-block', 
-      width: '100%'
+      position: 'relative' as const
     },
     mainButton: {
       width: '100%',
@@ -255,25 +256,31 @@ export const DayPicker: React.FC<DayPickerProps> = ({
       justifyContent: 'space-between',
       alignItems: 'center',
       textAlign: 'left' as const,
-      border: '1px solid #e2e8f0',
+      border: `1px solid ${isDark ? '#374151' : '#e2e8f0'}`,
       borderRadius: '6px',
-      backgroundColor: hoverStates.mainButton ? '#f3f4f6' : 'white',
+      backgroundColor: hoverStates.mainButton 
+        ? (isDark ? '#374151' : '#f3f4f6') 
+        : (isDark ? '#030712' : 'white'),
+      color: isDark ? '#e2e8f0' : 'inherit',
       transition: 'background-color 150ms ease',
       cursor: 'pointer'
     },
     calendarIcon: {
       marginLeft: '8px', 
-      opacity: 0.7 
+      opacity: 0.7,
+      color: isDark ? '#e2e8f0' : 'inherit'
     },
     popover: {
       position: 'absolute' as const, 
       zIndex: 9999, // Very high z-index to prevent issues
       marginTop: '8px', 
       width: '100%',
-      backgroundColor: 'white', 
-      border: '1px solid #e2e8f0', 
+      backgroundColor: isDark ? '#0f172a' : 'white', 
+      border: `1px solid ${isDark ? '#374151' : '#e2e8f0'}`, 
       borderRadius: '8px', 
-      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+      boxShadow: isDark 
+        ? '0 10px 15px -3px rgba(0, 0, 0, 0.3)' 
+        : '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
     },
     calendarContainer: {
       padding: '12px'
@@ -292,12 +299,16 @@ export const DayPicker: React.FC<DayPickerProps> = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: isHovering ? '#e5e7eb' : 'transparent',
+      backgroundColor: isHovering 
+        ? (isDark ? '#374151' : '#e5e7eb') 
+        : 'transparent',
+      color: isDark ? '#e2e8f0' : 'inherit',
       cursor: 'pointer',
       transition: 'background-color 150ms ease'
     }),
     monthYearText: {
-      fontWeight: '500'
+      fontWeight: '500',
+      color: isDark ? '#e2e8f0' : 'inherit'
     },
     weekdaysGrid: {
       display: 'grid', 
@@ -308,7 +319,7 @@ export const DayPicker: React.FC<DayPickerProps> = ({
     weekdayHeader: {
       textAlign: 'center' as const, 
       fontSize: '12px', 
-      color: '#6b7280'
+      color: isDark ? '#9ca3af' : '#6b7280'
     },
     daysGrid: {
       display: 'grid', 
@@ -326,8 +337,18 @@ export const DayPicker: React.FC<DayPickerProps> = ({
         justifyContent: 'center',
         borderRadius: '6px',
         fontSize: '14px',
-        backgroundColor: isSelected ? 'black' : isHovering ? '#e5e7eb' : 'transparent',
-        color: isSelected ? 'white' : day === null ? '#d1d5db' : disabled ? '#d1d5db' : 'inherit',
+        backgroundColor: isSelected 
+          ? (isDark ? '#2563eb' : 'black') 
+          : isHovering 
+            ? (isDark ? '#374151' : '#e5e7eb') 
+            : 'transparent',
+        color: isSelected 
+          ? 'white' 
+          : day === null 
+            ? (isDark ? '#4b5563' : '#d1d5db') 
+            : disabled 
+              ? (isDark ? '#4b5563' : '#d1d5db') 
+              : (isDark ? '#e2e8f0' : 'inherit'),
         cursor: day === null || disabled ? 'default' : 'pointer',
         transition: 'background-color 150ms ease',
         opacity: disabled ? 0.5 : 1,

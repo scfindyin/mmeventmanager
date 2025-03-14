@@ -6,8 +6,6 @@ import Link from "next/link"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
-import TimeRangePicker from '@/components/TimeRangePicker';
-import BasicTimePicker from '@/components/BasicTimePicker';
 
 // This is a server component, so we can run setup code here
 export default async function Home() {
@@ -82,7 +80,6 @@ export default async function Home() {
     return (
       <main className="min-h-screen p-4 md:p-6 lg:p-8">
         <EventDashboard />
-        <BasicTimePicker />
      </main>
             
     )

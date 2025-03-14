@@ -106,19 +106,19 @@ export default function BasicTimePicker({
         {/* Button that looks like your date picker */}
         <button
           type="button"
-          className={`flex justify-between items-center w-full border rounded-md px-3 py-2 text-left ${isHovered ? 'bg-gray-50' : 'bg-white'}`}
+          className={`flex justify-between items-center w-full border rounded-md px-3 py-2 text-left ${isHovered ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-950'} dark:border-gray-700 dark:text-gray-100`}
           onClick={() => setIsOpen(!isOpen)}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
           <span>{formatTo12Hour(time)}</span>
-          <Clock className="h-4 w-4 text-gray-500" />
+          <Clock className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         </button>
         
         {/* Dropdown that appears below */}
         {isOpen && (
           <div 
-            className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto" 
+            className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto" 
             ref={dropdownListRef}
           >
             <div className="py-1">
@@ -130,9 +130,9 @@ export default function BasicTimePicker({
                     ref={isSelected ? selectedItemRef : null}
                     className={`px-4 py-2 ${
                       option.disabled 
-                        ? 'text-gray-300 cursor-not-allowed' 
-                        : 'hover:bg-gray-100 cursor-pointer'
-                    } ${isSelected ? 'bg-gray-100 font-medium' : ''}`}
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer'
+                    } ${isSelected ? 'bg-gray-100 dark:bg-gray-800 font-medium' : ''} dark:text-gray-100`}
                     onClick={() => !option.disabled && handleTimeSelect(option.value)}
                   >
                     {option.label}
