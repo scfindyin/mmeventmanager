@@ -24,22 +24,39 @@ const formSchema = z.object({
   dayIndex: z.coerce.number().min(0, "Day is required"),
 })
 
+// Helper function to format time in 12-hour format
+function formatTo12Hour(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  
+  const [hourStr, minuteStr] = time24.split(':');
+  const hour = parseInt(hourStr, 10);
+  
+  if (isNaN(hour)) return time24;
+  
+  const period = hour >= 12 ? 'pm' : 'am';
+  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  
+  return `${hour12}:${minuteStr}${period}`;
+}
+
 type FormValues = z.infer<typeof formSchema>
 
 interface AgendaItemFormProps {
   eventId: string
   item?: AgendaItem | null
   onClose: () => void
-  onSave: (item: AgendaItem) => void
+  onSave: (item: AgendaItem) => Promise<boolean>
+  adhereToTimeRestrictions?: boolean
 }
 
-export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFormProps) {
+export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRestrictions = true }: AgendaItemFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [event, setEvent] = useState<any>(null)
   const [days, setDays] = useState<{ value: number; label: string }[]>([])
   const { toast } = useToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [timeError, setTimeError] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -76,9 +93,19 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
         setEvent(data)
 
         // Calculate days between start and end date
-        const startDate = dbStringToDate(data.startDate)
-        const endDate = dbStringToDate(data.endDate)
-        const dayCount = differenceInDays(endDate, startDate) + 1
+        const startDate = dbStringToDate(data.startDate || data.start_date)
+        const endDate = dbStringToDate(data.endDate || data.end_date)
+        
+        console.log("Event dates:", { 
+          startDateString: data.startDate || data.start_date, 
+          endDateString: data.endDate || data.end_date,
+          parsedStartDate: startDate,
+          parsedEndDate: endDate
+        })
+        
+        // Ensure we always have at least 1 day and handle case sensitivity issues
+        const dayCount = Math.max(differenceInDays(endDate, startDate) + 1, 1)
+        console.log("Day count:", dayCount)
 
         const dayOptions = []
         for (let i = 0; i < dayCount; i++) {
@@ -88,6 +115,8 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
             label: `Day ${i + 1} - ${format(date, "MMM d, yyyy")}`,
           })
         }
+        console.log("Day options:", dayOptions)
+        
         setDays(dayOptions)
         
         // Reset form with complete data
@@ -95,7 +124,7 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
           topic: item?.topic || "",
           description: item?.description || "",
           durationMinutes: item?.durationMinutes || 30,
-          dayIndex: item?.dayIndex || 0,
+          dayIndex: item?.dayIndex !== undefined ? item.dayIndex : 0,
         }, { keepDirty: false, keepValues: false })
       } catch (error) {
         console.error('Error in fetchEvent:', error)
@@ -108,89 +137,123 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
     fetchEvent()
   }, [eventId, item, form])
 
-  async function onSubmit(data: FormValues) {
-    try {
-      // Force getting the latest form values
-      const latestValues = form.getValues();
-      
-      setIsSubmitting(true)
-      setFormError(null)
-
-      // Create the updated item object
-      const updatedItem: AgendaItem = {
-        id: item?.id || `temp-${Date.now()}`,
-        event_id: eventId,
-        topic: latestValues.topic || data.topic,
-        description: latestValues.description || data.description,
-        durationMinutes: latestValues.durationMinutes || data.durationMinutes,
-        dayIndex: latestValues.dayIndex || data.dayIndex,
-        order: item?.order ?? 0,
-        startTime: item?.startTime ?? "",
-        endTime: item?.endTime ?? ""
-      }
-      
-      // If this is an existing item, use the direct API approach
-      if (item?.id) {
-        try {
-          // Prepare API payload with all the fields
-          const apiPayload = { 
-            itemId: updatedItem.id, 
-            description: updatedItem.description || '',
-            topic: updatedItem.topic,
-            durationMinutes: updatedItem.durationMinutes,
-            dayIndex: updatedItem.dayIndex,
-            orderPosition: updatedItem.order,
-            startTime: updatedItem.startTime,
-            endTime: updatedItem.endTime,
-            fullUpdate: true,  // Important: this ensures all fields are updated
-            useDirectSql: true // Use admin privileges
-          };
-          
-          // Call the API directly
-          const response = await fetch('/api/agenda-items/fix-description', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(apiPayload),
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`API error: ${errorData.error || response.statusText}`);
-          }
-          
-          // Get the response data
-          const result = await response.json();
-          
-          toast({
-            title: "Item updated",
-            description: "The agenda item has been saved successfully."
-          });
-          
-          // IMPORTANT: Always call onSave even after successful API update
-          // This ensures the parent component recalculates times for all items
-          // when the duration changes
-          onSave(updatedItem);
-          
-          // Close the form
-          onClose();
-        } catch (apiError) {
-          console.error('API update failed:', apiError);
-          // If API fails, fall back to the parent's onSave method
-          onSave(updatedItem);
-          onClose();
-        }
-      } else {
-        // NEW ITEM: Use the parent component's onSave callback
-        onSave(updatedItem);
-        onClose();
-      }
-    } catch (error) {
-      console.error('Error in form submission:', error)
-      setFormError(error instanceof Error ? error.message : 'An error occurred while saving')
-    } finally {
-      setIsSubmitting(false)
+  // Function to check if the current duration would exceed time boundaries
+  const checkTimeRestrictions = (dayIndex: number, durationMinutes: number) => {
+    if (!adhereToTimeRestrictions || !event) return true;
+    
+    // Calculate current day's available time
+    const dayStartTime = event.start_time || "09:00";
+    const dayEndTime = event.end_time || "17:00";
+    
+    // Convert times to minutes since midnight
+    const [startHours, startMinutes] = dayStartTime.split(':').map(Number);
+    const [endHours, endMinutes] = dayEndTime.split(':').map(Number);
+    
+    const dayStartMinutes = startHours * 60 + startMinutes;
+    const dayEndMinutes = endHours * 60 + endMinutes;
+    
+    // Calculate total available minutes
+    const availableMinutes = dayEndMinutes - dayStartMinutes;
+    
+    // Check if duration exceeds available time - just provide a warning now instead of blocking
+    if (durationMinutes > availableMinutes) {
+      setTimeError(`Duration exceeds available time (${Math.floor(availableMinutes / 60)}h ${availableMinutes % 60}m). Item may be moved to another day to fit the schedule.`);
+      // We still return true since we'll handle this by moving to the next day
+      return true;
     }
-  }
+    
+    setTimeError(null);
+    return true;
+  };
+
+  // Update validation when duration changes
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'durationMinutes' || name === 'dayIndex') {
+        const dayIndex = form.getValues('dayIndex');
+        const duration = form.getValues('durationMinutes');
+        checkTimeRestrictions(dayIndex, duration);
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form, adhereToTimeRestrictions, event]);
+
+  const onSubmit = async (data: FormValues) => {
+    setIsSubmitting(true);
+
+    try {
+      // Format the item with form data
+      const itemToSave: AgendaItem = {
+        id: item?.id || '',
+        event_id: eventId,
+        topic: data.topic,
+        description: data.description || '',
+        durationMinutes: data.durationMinutes,
+        dayIndex: data.dayIndex,
+        order: item?.order || 0, // Default order
+        startTime: item?.startTime || '',
+        endTime: item?.endTime || '',
+      };
+
+      // If we're changing the day for an existing item or it's a new item,
+      // set order to -1 to signal it should be placed at the end of the day
+      if ((item?.id && item.dayIndex !== data.dayIndex) || !item?.id) {
+        console.log(`Setting order to -1 for item moved to day ${data.dayIndex} or new item`);
+        itemToSave.order = -1;
+      } else if (item?.order !== undefined) {
+        // If we have a selected item with a defined order and not changing day, carry that over
+        itemToSave.order = item.order;
+      }
+
+      console.log("Submitting item:", itemToSave);
+      
+      // Clear any previous errors
+      setFormError(null);
+      
+      // Call the save handler
+      const success = await onSave(itemToSave);
+      
+      if (success) {
+        onClose();
+      } else {
+        // If onSave returns false, it means there was an error handled in the parent component
+        setIsSubmitting(false);
+      }
+    } catch (error: any) {
+      console.error("Error submitting form:", error);
+      
+      // Create a user-friendly error message
+      let errorMessage = "Failed to save agenda item";
+      
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error instanceof Error) {
+        // Extract the helpful part of the error message if it's an API error
+        if (error.message.includes('API error:')) {
+          try {
+            const jsonStr = error.message.split('API error:')[1].trim();
+            const errorData = JSON.parse(jsonStr);
+            
+            if (errorData.error) {
+              errorMessage = `Server error: ${errorData.error}`;
+              
+              if (errorData.suggestion) {
+                errorMessage += `. ${errorData.suggestion}`;
+              }
+            }
+          } catch (e) {
+            errorMessage = error.message;
+          }
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setFormError(errorMessage);
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
@@ -252,9 +315,18 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Duration</FormLabel>
-                    <FormDescription>Select the total duration in hours and minutes</FormDescription>
+                    <FormDescription>
+                      Select the total duration in hours and minutes
+                      <span className="block text-xs text-muted-foreground">
+                        Event hours: {formatTo12Hour(event?.start_time || "09:00")} - {formatTo12Hour(event?.end_time || "17:00")} (exceeding shows warning)
+                      </span>
+                    </FormDescription>
                     <Select
-                      onValueChange={(value) => field.onChange(Number.parseInt(value))}
+                      onValueChange={(value) => {
+                        const duration = Number.parseInt(value);
+                        field.onChange(duration);
+                        checkTimeRestrictions(form.getValues('dayIndex'), duration);
+                      }}
                       defaultValue={field.value.toString()}
                     >
                       <FormControl>
@@ -279,6 +351,9 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                    {timeError && (
+                      <p className="text-sm font-medium text-destructive">{timeError}</p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -289,8 +364,12 @@ export function AgendaItemForm({ eventId, item, onClose, onSave }: AgendaItemFor
                   <FormItem>
                     <FormLabel>Day</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(Number.parseInt(value))}
-                      defaultValue={field.value?.toString()}
+                      onValueChange={(value) => {
+                        const dayIndex = Number.parseInt(value);
+                        field.onChange(dayIndex);
+                        checkTimeRestrictions(dayIndex, form.getValues('durationMinutes'));
+                      }}
+                      value={field.value?.toString()}
                       disabled={isLoading || days.length === 0}
                     >
                       <FormControl>

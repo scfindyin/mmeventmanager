@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Edit, Trash, GripVertical, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Clock } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Edit, Trash, GripVertical, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Clock, Plus, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -31,9 +31,18 @@ interface AgendaItemListProps {
   isLoading: boolean
   onEdit: (item: AgendaItem) => void
   onReorder: (items: AgendaItem[]) => void
+  onAddAtPosition?: (dayIndex: number, afterOrder: number) => void
+  adhereToTimeRestrictions?: boolean
 }
 
-export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaItemListProps) {
+export function AgendaItemList({ 
+  items, 
+  isLoading, 
+  onEdit, 
+  onReorder,
+  onAddAtPosition,
+  adhereToTimeRestrictions = true
+}: AgendaItemListProps) {
   const [currentItems, setCurrentItems] = useState<AgendaItem[]>(items)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<AgendaItem | null>(null)
@@ -59,6 +68,55 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
     }
   };
 
+  // Function to check if an item exceeds time boundaries
+  const checkTimeExceeded = (item: AgendaItem): boolean => {
+    if (!adhereToTimeRestrictions || !item.startTime || !item.endTime) return false;
+    
+    // Parse times
+    const [startHrs, startMins] = item.startTime.split(':').map(Number);
+    const [endHrs, endMins] = item.endTime.split(':').map(Number);
+    
+    // A reasonable default end time for a day's agenda
+    const defaultEndTime = "17:00";
+    const [defaultEndHrs, defaultEndMins] = defaultEndTime.split(':').map(Number);
+    
+    // Convert to minutes since midnight
+    const endTimeInMins = endHrs * 60 + endMins;
+    const defaultEndInMins = defaultEndHrs * 60 + defaultEndMins;
+    
+    // Check if end time exceeds the default end time
+    return endTimeInMins > defaultEndInMins;
+  };
+
+  // Check for items exceeding time limits and show a toast notification
+  useEffect(() => {
+    if (!adhereToTimeRestrictions || currentItems.length === 0) return;
+    
+    // Find any items that exceed their day's time limit
+    const exceededItems = currentItems.filter(item => checkTimeExceeded(item));
+    
+    if (exceededItems.length > 0) {
+      // Get the day numbers (1-indexed for user display)
+      const dayNumbers = [...new Set(exceededItems.map(item => item.dayIndex + 1))].sort();
+      
+      // Create a user-friendly message
+      let message = "";
+      if (dayNumbers.length === 1) {
+        message = `Day ${dayNumbers[0]} has ${exceededItems.length} item${exceededItems.length > 1 ? 's' : ''} that exceed${exceededItems.length === 1 ? 's' : ''} the day's time limit.`;
+      } else {
+        message = `Days ${dayNumbers.join(', ')} have items that exceed their time limits.`;
+      }
+      
+      // Show toast with extended duration (5 seconds = 5000ms)
+      toast({
+        title: "Time limit exceeded",
+        description: message,
+        variant: "destructive",
+        duration: 5000
+      });
+    }
+  }, [currentItems, adhereToTimeRestrictions, toast]);
+
   async function handleDeleteItem(id: string) {
     try {
       const { error } = await supabase.from("agenda_items").delete().eq("id", id)
@@ -69,8 +127,43 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
       const updatedItems = currentItems.filter((item) => item.id !== id)
       setCurrentItems(updatedItems)
 
-      // Recalculate positions and times
-      const reindexedItems = updatedItems.map((item, index) => {
+      // Get a reference item for recalculation
+      const referenceItem = updatedItems[0];
+      
+      if (referenceItem) {
+        // Trigger a recalculation to update times within each day (no cross-day movement)
+        try {
+          const response = await fetch('/api/agenda-items/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              item: {
+                id: referenceItem.id,
+                event_id: referenceItem.event_id,
+                topic: referenceItem.topic,
+                description: referenceItem.description || "",
+                duration_minutes: referenceItem.durationMinutes,
+                day_index: referenceItem.dayIndex,
+                order_position: referenceItem.order,
+                start_time: referenceItem.startTime,
+                end_time: referenceItem.endTime
+              },
+              triggerFullRecalculation: false // Just recalculate times, don't move between days
+            }),
+          });
+          
+          if (!response.ok) {
+            console.error("Error in recalculation after delete:", await response.json());
+          }
+        } catch (recalcError) {
+          console.error("Failed to trigger recalculation:", recalcError);
+        }
+      }
+
+      // Recalculate positions and times with proper spacing
+      const reindexedItems = updatedItems.map((item) => {
         // Find all items in the same day
         const dayItems = updatedItems.filter((i) => i.dayIndex === item.dayIndex)
         // Sort them by order
@@ -80,7 +173,7 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
 
         return {
           ...item,
-          order: dayIndex,
+          order: dayIndex * 10, // Use increments of 10
         }
       })
 
@@ -125,7 +218,7 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
 
       // Update positions for all items in the destination day
       destinationDayItems.forEach((item, index) => {
-        item.order = index
+        item.order = index * 10;
       })
 
       // Combine all items: items from other days + updated source day items + updated destination day items
@@ -144,9 +237,9 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
       // Insert the moved item at the new position
       sourceDayItems.splice(result.destination.index, 0, movedItem)
 
-      // Update positions for all items in the day
+      // Update positions for all items in the day, using increments of 10 to leave gaps
       sourceDayItems.forEach((item, index) => {
-        item.order = index
+        item.order = index * 10;
       })
 
       // Combine all items: items from other days + updated day items
@@ -191,9 +284,9 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
     // Insert the item at the new position
     dayItems.splice(newIndex, 0, movedItem)
 
-    // Update positions for all items in the day
+    // Update positions for all items in the day, using increments of 10
     dayItems.forEach((item, index) => {
-      item.order = index
+      item.order = index * 10;
     })
 
     // Combine all items: items from other days + updated day items
@@ -204,6 +297,64 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
 
     // Update positions and recalculate times
     onReorder(updatedItems)
+  }
+
+  function moveItemToDay(item: AgendaItem, direction: "previous" | "next") {
+    // Calculate the target day index
+    const targetDayIndex = direction === "previous" 
+      ? Math.max(0, item.dayIndex - 1) 
+      : item.dayIndex + 1;
+    
+    // If trying to move to previous day but already on first day, do nothing
+    if (direction === "previous" && item.dayIndex === 0) {
+      return;
+    }
+    
+    // No need to check for maximum day index when moving forward
+    // Users should be able to create a new day by moving an item forward
+    
+    // Get items for the target day
+    const targetDayItems = currentItems.filter(i => i.dayIndex === targetDayIndex)
+      .sort((a, b) => a.order - b.order);
+    
+    // Determine the new order position
+    let newOrder: number;
+    
+    if (direction === "previous") {
+      // When moving to previous day, place at the end
+      if (targetDayItems.length > 0) {
+        const lastItem = targetDayItems[targetDayItems.length - 1];
+        newOrder = lastItem.order + 10;
+      } else {
+        newOrder = 0;
+      }
+    } else {
+      // When moving to next day, place at the beginning
+      if (targetDayItems.length > 0) {
+        const firstItem = targetDayItems[0];
+        newOrder = Math.max(0, firstItem.order - 10);
+      } else {
+        newOrder = 0;
+      }
+    }
+    
+    // Create a copy of the item with the new day index and order
+    const updatedItem = {
+      ...item,
+      dayIndex: targetDayIndex,
+      order: newOrder
+    };
+    
+    // Update the items array
+    const updatedItems = currentItems.map(i => 
+      i.id === item.id ? updatedItem : i
+    );
+    
+    // Update the UI
+    setCurrentItems(updatedItems);
+    
+    // Trigger reordering to update the database
+    onReorder(updatedItems);
   }
 
   if (isLoading) {
@@ -265,7 +416,7 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                       <Draggable key={item.id} draggableId={item.id} index={index}>
                         {(provided) => (
                           <div ref={provided.innerRef} {...provided.draggableProps}>
-                            <Card className="relative">
+                            <Card className={`relative ${adhereToTimeRestrictions && checkTimeExceeded(item) ? 'border-red-400' : ''}`}>
                               <div className="absolute left-0 top-0 bottom-0 flex items-center px-2 text-muted-foreground">
                                 <div {...provided.dragHandleProps} className="cursor-grab">
                                   <GripVertical className="h-5 w-5" />
@@ -276,47 +427,94 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                                   <CardTitle className="text-lg">{item.topic}</CardTitle>
                                   <div className="flex items-center gap-1">
                                     <Button
-                                      variant="ghost"
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => moveItemToDay(item, "previous")}
+                                      disabled={item.dayIndex === 0}
+                                      title="Move to previous day"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                    >
+                                      <Minus className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move to previous day</span>
+                                    </Button>
+                                    
+                                    <Button
+                                      variant="outline"
                                       size="icon"
                                       onClick={() => moveItem(item, "top")}
                                       disabled={index === 0}
+                                      title="Move to top of day"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
-                                      <ChevronsUp className="h-4 w-4" />
-                                      <span className="sr-only">Move to top</span>
+                                      <ChevronsUp className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move to top of day</span>
                                     </Button>
+                                    
                                     <Button
-                                      variant="ghost"
+                                      variant="outline"
                                       size="icon"
                                       onClick={() => moveItem(item, "up")}
                                       disabled={index === 0}
+                                      title="Move up one item"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
-                                      <ArrowUp className="h-4 w-4" />
-                                      <span className="sr-only">Move up</span>
+                                      <ChevronUp className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move up one item</span>
                                     </Button>
+                                    
                                     <Button
-                                      variant="ghost"
+                                      variant="outline"
                                       size="icon"
                                       onClick={() => moveItem(item, "down")}
                                       disabled={index === dayItems.length - 1}
+                                      title="Move down one item"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
-                                      <ArrowDown className="h-4 w-4" />
-                                      <span className="sr-only">Move down</span>
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move down one item</span>
                                     </Button>
+                                    
                                     <Button
-                                      variant="ghost"
+                                      variant="outline"
                                       size="icon"
                                       onClick={() => moveItem(item, "bottom")}
                                       disabled={index === dayItems.length - 1}
+                                      title="Move to bottom of day"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
-                                      <ChevronsDown className="h-4 w-4" />
-                                      <span className="sr-only">Move to bottom</span>
+                                      <ChevronsDown className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move to bottom of day</span>
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
-                                      <Edit className="h-4 w-4" />
+                                    
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => moveItemToDay(item, "next")}
+                                      disabled={false} // Allow moving to next day always
+                                      title="Move to next day"
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                      <span className="sr-only">Move to next day</span>
+                                    </Button>
+                                    
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      onClick={() => onEdit(item)}
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                    >
+                                      <Edit className="h-3.5 w-3.5" />
                                       <span className="sr-only">Edit</span>
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)}>
-                                      <Trash className="h-4 w-4" />
+                                    
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      onClick={() => handleDeleteItem(item.id)}
+                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                    >
+                                      <Trash className="h-3.5 w-3.5" />
                                       <span className="sr-only">Delete</span>
                                     </Button>
                                   </div>
@@ -329,6 +527,11 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                                   </div>
                                   <div>
                                     <span className="font-medium">Time:</span> {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                                    {adhereToTimeRestrictions && checkTimeExceeded(item) && (
+                                      <span className="ml-2 text-xs text-red-500 font-medium">
+                                        Exceeds time limit
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                                 {item.description && (
@@ -338,9 +541,22 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                                 )}
                               </CardContent>
                             </Card>
-                            {index < dayItems.length - 1 && (
-                              <div className="flex items-center justify-center my-2">
-                                <div className="w-full border-t border-dashed"></div>
+                            {onAddAtPosition && (index < dayItems.length - 1) && (
+                              <div 
+                                className="flex items-center justify-center my-2 group cursor-pointer"
+                                onClick={() => {
+                                  // Calculate the midpoint between current item and next item
+                                  const currentOrder = item.order;
+                                  const nextOrder = dayItems[index + 1].order;
+                                  const midpointOrder = Math.floor((currentOrder + nextOrder) / 2);
+                                  onAddAtPosition(dayIndex, midpointOrder);
+                                }}
+                              >
+                                <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
+                                <div className="mx-2 p-1 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
+                                  <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                                </div>
+                                <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
                               </div>
                             )}
                           </div>
@@ -348,6 +564,31 @@ export function AgendaItemList({ items, isLoading, onEdit, onReorder }: AgendaIt
                       </Draggable>
                     ))}
                     {provided.placeholder}
+                    
+                    {onAddAtPosition && dayItems.length > 0 && (
+                      <div 
+                        className="flex items-center justify-center mt-2 group cursor-pointer"
+                        onClick={() => onAddAtPosition(dayIndex, (dayItems[dayItems.length - 1].order + 10))}
+                      >
+                        <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
+                        <div className="mx-2 p-1 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
+                          <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                        </div>
+                        <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
+                      </div>
+                    )}
+                    
+                    {onAddAtPosition && dayItems.length === 0 && (
+                      <div 
+                        className="flex items-center justify-center my-4 cursor-pointer"
+                        onClick={() => onAddAtPosition(dayIndex, 0)}
+                      >
+                        <Button variant="outline" className="flex items-center">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add first item for Day {dayIndex + 1}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </Droppable>

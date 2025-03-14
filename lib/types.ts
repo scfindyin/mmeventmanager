@@ -20,6 +20,7 @@ export interface Event {
   agendaItems: AgendaItem[];
   logo_url: string | null;
   created_at: string; // ISO timestamp from Supabase
+  adhereToTimeRestrictions?: boolean; // Whether to enforce time restrictions (default: true)
 }
 
 export interface AgendaItem {
@@ -60,6 +61,7 @@ export interface EventWithDates {
   end_time: string | null;
   logo_url: string | null;
   created_at: Date;     // Parsed JavaScript Date object
+  adhere_to_time_restrictions?: boolean; // Whether to enforce time restrictions (default: true)
 }
 
 // Date utilities for the new date types
@@ -131,7 +133,11 @@ export const dateUtils = {
       ...eventWithDates,
       startDate: dateUtils.toISODateString(eventWithDates.start_date),
       endDate: dateUtils.toISODateString(eventWithDates.end_date),
-      created_at: eventWithDates.created_at.toISOString()
+      created_at: eventWithDates.created_at.toISOString(),
+      adhereToTimeRestrictions: eventWithDates.adhere_to_time_restrictions,
+      hoursOfOperation: {}, // Add default values to satisfy the type checker
+      attendees: [],
+      agendaItems: []
     };
   }
 }; 
