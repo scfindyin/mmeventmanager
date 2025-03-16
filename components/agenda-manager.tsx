@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Download, Plus, Info, Home, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { printTypeInfo, ensureNumber } from "@/lib/debug-utils"
+import { recalculateAgendaTimes } from "@/lib/agenda-recalculation"
 
 interface AgendaManagerProps {
   eventId: string
@@ -37,6 +39,11 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   const router = useRouter()
   const [managerError, setManagerError] = useState<Error | string | null>(null)
   const [adhereToTimeRestrictions, setAdhereToTimeRestrictions] = useState(true)
+  const [totalDays, setTotalDays] = useState<number | undefined>(undefined)
+  const [lastChangedItemId, setLastChangedItemId] = useState<string | null>(null)
+  const [eventEndTime, setEventEndTime] = useState<string>("")
+  const [eventStartTime, setEventStartTime] = useState<string>("")
+  const previousItems = useRef<AgendaItem[]>([])
 
   useEffect(() => {
     fetchEventAndAgenda()
@@ -44,6 +51,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
 
   async function fetchEventAndAgenda() {
     try {
+      console.log("fetchEventAndAgenda: Starting to fetch event data");
       setIsLoading(true)
 
       // Fetch event details from the API
@@ -57,8 +65,72 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         throw new Error('No event data received')
       }
 
+      console.log("fetchEventAndAgenda: Received event data:", {
+        eventId: eventData.id,
+        title: eventData.title,
+        agendaItemsCount: eventData.agendaItems?.length || 0
+      });
+      
+      // Extract the event end time - require it to exist
+      if (eventData.endTime || eventData.end_time) {
+        const endTime = eventData.endTime || eventData.end_time;
+        console.log(`Event end time: ${endTime}`);
+        setEventEndTime(endTime);
+      } else {
+        console.error("ERROR: No event end time found in database. This is required.");
+        throw new Error("Event end time is required but not found in database");
+      }
+      
+      // Extract the event start time - require it to exist
+      if (eventData.startTime || eventData.start_time) {
+        const startTime = eventData.startTime || eventData.start_time;
+        console.log(`Event start time: ${startTime}`);
+        setEventStartTime(startTime);
+      } else {
+        console.error("ERROR: No event start time found in database. This is required.");
+        throw new Error("Event start time is required but not found in database");
+      }
+      
+      // Calculate total days if we have start and end dates
+      if ((eventData.startDate && eventData.endDate) || (eventData.start_date && eventData.end_date)) {
+        // Try both camelCase and snake_case properties (API might be inconsistent)
+        const startDateStr = eventData.startDate || eventData.start_date;
+        const endDateStr = eventData.endDate || eventData.end_date;
+        
+        if (startDateStr && endDateStr) {
+          const startDate = new Date(startDateStr);
+          const endDate = new Date(endDateStr);
+        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+        setTotalDays(diffDays);
+        console.log(`Total days calculated: ${diffDays}`);
+        } else {
+          // If we still can't get valid dates, default to 3 days
+          console.log("Could not calculate days from dates, using default of 3");
+          setTotalDays(3);
+        }
+      } else {
+        // Default to 3 days if no date information is available
+        console.log("No date information available, using default of 3 days");
+        setTotalDays(3);
+      }
+      
+      if (eventData.agendaItems) {
+        // Log the day indexes of all items to see if they match what we expect
+        const dayIndices = eventData.agendaItems.map((item: AgendaItem) => item.dayIndex);
+        console.log("fetchEventAndAgenda: Day indices in loaded data:", 
+          [...new Set(dayIndices)].sort(), 
+          "Item count by day:", 
+          dayIndices.reduce((acc: Record<number, number>, dayIndex: number) => {
+            acc[dayIndex] = (acc[dayIndex] || 0) + 1;
+            return acc;
+          }, {})
+        );
+      }
+
       setEvent(eventData)
       setAgendaItems(eventData.agendaItems || [])
+      console.log("fetchEventAndAgenda: Updated state with new data");
       
       // No longer update adhereToTimeRestrictions from event settings
       // Always keep it true for the red border warning behavior
@@ -68,11 +140,17 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
       setManagerError(getErrorMessage(error))
     } finally {
       setIsLoading(false)
+      console.log("fetchEventAndAgenda: Finished loading");
     }
   }
 
   function calculateAgendaTimes(items: AgendaItem[]): AgendaItem[] {
     if (items.length === 0) return items
+    
+    if (!eventStartTime) {
+      console.error("ERROR: Cannot calculate agenda times without a valid event start time");
+      throw new Error("Event start time is required for time calculations");
+    }
 
     // Group items by day
     const itemsByDay: Record<number, AgendaItem[]> = {}
@@ -91,7 +169,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
       // Make sure to sort by the integer order value
       const dayItems = itemsByDay[dayIndex].sort((a, b) => a.order - b.order)
 
-      let currentTime = "09:00" // Default start time
+      let currentTime = eventStartTime // Use event start time
 
       dayItems.forEach((item) => {
         // Set the start time for this item
@@ -133,6 +211,28 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   function handleAddItemAtPosition(dayIndex: number, afterOrder: number) {
     // Create a template for a new item to be inserted at the position
     // We'll start with a default duration of 30 mins
+    let orderValue = afterOrder;
+    
+    // Special case: Position is 0 or -1000, it's from the day header
+    // Calculate a position at the beginning of the day
+    if (afterOrder === -1000 || afterOrder === 0) {
+      console.log(`Adding at beginning of day ${dayIndex} with requested position: ${afterOrder}`);
+      // Get items in this day, if any
+      const dayItems = agendaItems
+        .filter(i => i.dayIndex === dayIndex)
+        .sort((a, b) => a.order - b.order);
+        
+      if (dayItems.length > 0) {
+        // Set position before the first item
+        orderValue = dayItems[0].order - 1000;
+        console.log(`Setting position to ${orderValue} to be before first item with position ${dayItems[0].order}`);
+      } else {
+        // No items, set to 0
+        orderValue = 0;
+        console.log(`No items in day ${dayIndex}, setting position to 0`);
+      }
+    }
+    
     const newItem: AgendaItem = {
       id: `temp-${Date.now()}`,
       event_id: eventId,
@@ -140,12 +240,12 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
       description: "",
       durationMinutes: 30,
       dayIndex: dayIndex,
-      order: afterOrder, // Use the calculated position directly
+      order: orderValue, // Use the calculated position
       startTime: "",
       endTime: ""
     };
     
-    console.log(`Creating new agenda item at position: ${afterOrder} for day: ${dayIndex}`);
+    console.log(`Creating new agenda item at position: ${orderValue} for day: ${dayIndex}`);
     
     // Set this as the selected item and show the form
     setSelectedItem(newItem);
@@ -160,44 +260,116 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   function handleFormClose() {
     setShowItemForm(false)
     setSelectedItem(null)
+    
+    // Refresh data from the database
     fetchEventAndAgenda()
   }
 
-  async function handleReorderItems(reorderedItems: AgendaItem[]) {
-    try {
-      // First update the positions in the database
-      const updatePromises = reorderedItems.map(item => {
-        return supabase
-          .from("agenda_items")
-          .update({
-            order_position: item.order,
-            day_index: item.dayIndex,
-          })
-          .eq("id", item.id);
-      });
+  const handleReorderItems = async (items: AgendaItem[], skipRefresh: boolean = false) => {
+    console.log("handleReorderItems called");
+    
+    // Find the moved item by comparing with previous items
+    const movedItem = items.find((item, index) => {
+      const prevItem = previousItems.current[index];
+      return prevItem && (item.dayIndex !== prevItem.dayIndex || item.order !== prevItem.order);
+    });
+
+    if (movedItem) {
+      const prevItem = previousItems.current.find((item: AgendaItem) => item.id === movedItem.id);
       
-      await Promise.all(updatePromises);
-      
-      // Get all unique day indices from the reordered items
-      const dayIndices = [...new Set(reorderedItems.map(item => item.dayIndex))];
-      
-      // Recalculate times for each affected day separately
-      for (const dayIndex of dayIndices) {
-        await recalculateTimesForDay(dayIndex);
+      if (prevItem && prevItem.dayIndex === movedItem.dayIndex) {
+        console.log("Item moved within the same day, setting for scroll:", movedItem.id);
+        setLastChangedItemId(movedItem.id);
       }
-      
-      // Refresh agenda items from the server to get the updated times and positions
-      await fetchEventAndAgenda();
-      
-      toast({
-        title: "Agenda updated",
-        description: "The agenda items have been reordered and times recalculated.",
-      });
-    } catch (error: any) {
-      console.error("Error updating agenda:", error);
-      setManagerError(getErrorMessage(error));
     }
-  }
+    
+    // Normalize all item positions to ensure consistent ordering
+    // Create a copy of the items array we can modify
+    let normalizedItems = [...items];
+    
+    // Group items by day
+    const allDayIndices = new Set(normalizedItems.map(item => item.dayIndex));
+    
+    // Normalize each day's items
+    allDayIndices.forEach(dayIndex => {
+      // Get items for this day and sort by order
+      const dayItems = normalizedItems
+        .filter(item => item.dayIndex === dayIndex)
+        .sort((a, b) => a.order - b.order);
+        
+      // Assign evenly spaced order values (0, 1000, 2000, etc.)
+      dayItems.forEach((item, index) => {
+        const normalizedOrder = index * 1000;
+        
+        // Find and update the item directly in the items array
+        const itemIndex = normalizedItems.findIndex(i => i.id === item.id);
+        if (itemIndex !== -1) {
+          normalizedItems[itemIndex].order = normalizedOrder;
+        }
+      });
+    });
+
+    // Recalculate all item times based on the normalized positions
+    const recalculatedItems = await recalculateAgendaTimes(
+      normalizedItems,
+      eventStartTime
+    );
+
+    // Update state first for immediate UI feedback
+    setAgendaItems(recalculatedItems);
+    previousItems.current = recalculatedItems;
+
+    // Always update the database unless explicitly told to skip
+    if (!skipRefresh) {
+      console.log("Updating all item positions in database...");
+      try {
+        // Make batch database update with all items
+        const response = await fetch(`/api/events/${eventId}/items/batch-order`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            movedItemId: movedItem?.id || null,
+            items: recalculatedItems.map(item => ({
+              id: item.id,
+              event_id: item.event_id,
+              topic: item.topic || "Untitled Item",
+              description: item.description || "",
+              duration_minutes: item.durationMinutes,
+              day_index: item.dayIndex,
+              order_position: item.order,
+              start_time: item.startTime || "00:00", 
+              end_time: item.endTime || "00:00"
+            }))
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || 'Failed to update item order';
+          console.error("Batch update error details:", errorData);
+          throw new Error(errorMessage);
+        }
+
+        console.log("Batch order update successful");
+      } catch (error) {
+        console.error("Error updating order:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update item order. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+
+    // Clear scroll target after a delay
+    if (movedItem) {
+      setTimeout(() => {
+        setLastChangedItemId(null);
+      }, 1000);
+    }
+  };
 
   async function handleGeneratePDF() {
     if (!event) return
@@ -216,8 +388,20 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
 
   async function handleSaveItem(item: AgendaItem) {
     try {
+      console.log("handleSaveItem called with:", item);
+      
       // Check if this is a new item with a temp ID
       const isNewItem = !item.id || item.id === '' || item.id.startsWith('temp-');
+      
+      // For existing items, check if the day has changed
+      let dayHasChanged = false;
+      if (!isNewItem) {
+        const existingItem = agendaItems.find(i => i.id === item.id);
+        if (existingItem && existingItem.dayIndex !== item.dayIndex) {
+          console.log(`Item day changed from ${existingItem.dayIndex} to ${item.dayIndex} - will need full recalculation`);
+          dayHasChanged = true;
+        }
+      }
       
       // Generate a proper UUID for new items
       const itemId = isNewItem ? uuidv4() : item.id;
@@ -228,41 +412,34 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         id: itemId
       };
       
-      console.log("Saving agenda item:", {
+      // Format to DB style for logging
+      const itemForLogging = {
         id: itemId,
-        isNewItem,
-        eventId,
         topic: modifiedItem.topic,
-        description: modifiedItem.description,
-        durationMinutes: modifiedItem.durationMinutes,
-        dayIndex: modifiedItem.dayIndex,
-        order: modifiedItem.order
-      });
+        day_index: modifiedItem.dayIndex,
+        duration_minutes: modifiedItem.durationMinutes,
+        order_position: modifiedItem.order
+      };
       
-      // Determine the order position
+      console.log(`Processing item: ${isNewItem ? 'NEW' : 'EXISTING'} -`, itemForLogging);
+      
+      // If order is -1, place at the end of the day
       let orderPosition = modifiedItem.order;
       
-      // SIMPLIFIED ORDERING LOGIC:
-      // 1. If order is -1, place at the end of the day
-      // 2. If it's a new item with no specific order, place at the end of the day
-      // 3. Otherwise, use the specified order position
-      
-      // If order is -1 (end of day) or it's a new item without explicit position
-      if (orderPosition === -1 || (isNewItem && !orderPosition)) {
-        console.log("Placing item at the end of day", modifiedItem.dayIndex);
+      if (orderPosition === -1) {
+        console.log(`Order position is -1, will place at the end of day ${modifiedItem.dayIndex}`);
         
-        // Find the highest order position for this day
-        const { data: existingItems } = await supabase
-          .from("agenda_items")
-          .select("order_position")
-          .eq("event_id", eventId)
-          .eq("day_index", modifiedItem.dayIndex)
-          .order("order_position", { ascending: false })
-          .limit(1);
+        // Get all existing items for this day to determine the last position
+        const existingItems = agendaItems
+          .filter(i => i.dayIndex === modifiedItem.dayIndex)
+          .sort((a, b) => b.order - a.order); // Sort in descending order
+          
+        console.log(`Found ${existingItems.length} existing items in day ${modifiedItem.dayIndex}`);
         
-        if (existingItems && existingItems.length > 0) {
-          const currentMax = typeof existingItems[0].order_position === 'number' 
-            ? existingItems[0].order_position 
+        if (existingItems.length > 0) {
+          // Get the highest order and add 10
+          const currentMax = typeof existingItems[0].order === 'number' 
+            ? existingItems[0].order 
             : 0;
           orderPosition = currentMax + 10; // Place at the end with increment of 10
         } else {
@@ -274,48 +451,119 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         console.log(`Using specified order position: ${orderPosition}`);
       }
       
-      // Prepare the item data - ensure we use the proper UUID
-      const itemData = {
-        id: itemId, // Always use the UUID we generated above
-        event_id: eventId,
-        topic: modifiedItem.topic,
-        description: modifiedItem.description || "", 
-        duration_minutes: modifiedItem.durationMinutes,
-        day_index: modifiedItem.dayIndex,
-        order_position: orderPosition,
-        start_time: modifiedItem.startTime || "09:00",
-        end_time: modifiedItem.endTime || "09:30",
-      };
+      // Ensure dayIndex is a number
+      const dayIndex = ensureNumber(modifiedItem.dayIndex, 0);
       
-      console.log("Item data for upsert:", itemData);
+      printTypeInfo("handleSaveItem dayIndex", dayIndex);
       
-      // Try inserting with a custom fetch call to get better error messages
-      const response = await fetch('/api/agenda-items/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          item: itemData,
-          triggerFullRecalculation: false, // Don't do full recalculation to avoid moving items
-          respectDayAssignments: true // New parameter to ensure items stay on assigned days
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`API error: ${JSON.stringify(errorData)}`);
+      if (!eventStartTime) {
+        throw new Error("Cannot save item: Event start time is required");
       }
       
-      // After saving, manually recalculate times for the specific day without moving items
-      await recalculateTimesForDay(modifiedItem.dayIndex);
+      // Create the full array of updated items with the new/updated item included
+      let updatedItems: AgendaItem[];
       
-      await fetchEventAndAgenda(); // Refresh all items from the server
+      if (isNewItem) {
+        // For new items, add to the current items list
+        updatedItems = [...agendaItems, { 
+          ...modifiedItem, 
+          startTime: eventStartTime,
+          endTime: addMinutesToTime(eventStartTime, modifiedItem.durationMinutes),
+          order: orderPosition 
+        }];
+      } else {
+        // For existing items, update the item in the list
+        updatedItems = agendaItems.map(existingItem => 
+          existingItem.id === itemId 
+            ? {
+                ...modifiedItem,
+                startTime: existingItem.startTime, // Preserve existing times for now
+                endTime: existingItem.endTime,
+                order: orderPosition
+              }
+            : existingItem
+        );
+      }
       
-      toast({
-        title: isNewItem ? "Item added" : "Item updated",
-        description: "The agenda item has been saved successfully.",
+      // Normalize all item positions to ensure consistent ordering
+      // Group items by day
+      const allDayIndices = new Set(updatedItems.map(item => item.dayIndex));
+      
+      // Normalize each day's items
+      allDayIndices.forEach(dayIndex => {
+        // Get items for this day and sort by order
+        const dayItems = updatedItems
+          .filter(item => item.dayIndex === dayIndex)
+          .sort((a, b) => a.order - b.order);
+          
+        // Assign evenly spaced order values (0, 1000, 2000, etc.)
+        dayItems.forEach((item, index) => {
+          const normalizedOrder = index * 1000;
+          
+          // Find and update the item directly in the items array
+          const itemIndex = updatedItems.findIndex(i => i.id === item.id);
+          if (itemIndex !== -1) {
+            updatedItems[itemIndex].order = normalizedOrder;
+          }
+        });
       });
+      
+      // Recalculate all item times based on the normalized positions
+      const recalculatedItems = await recalculateAgendaTimes(
+        updatedItems,
+        eventStartTime
+      );
+      
+      // Make the database API call with all normalized items and recalculated times
+      try {
+        // Single batch update for all items including the new/edited one
+        const batchResponse = await fetch(`/api/events/${eventId}/items/batch-order`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            movedItemId: itemId,
+            items: recalculatedItems.map(item => ({
+              id: item.id,
+              event_id: item.event_id,
+              topic: item.topic || "Untitled Item",
+              description: item.description || "",
+              duration_minutes: item.durationMinutes,
+              day_index: item.dayIndex,
+              order_position: item.order,
+              start_time: item.startTime || "00:00",
+              end_time: item.endTime || "00:00"
+            }))
+          }),
+        });
+        
+        if (!batchResponse.ok) {
+          const errorData = await batchResponse.json().catch(() => ({}));
+          const errorMessage = errorData.error || 'Failed to update items';
+          console.error("Batch update error details:", errorData);
+          throw new Error(errorMessage);
+        }
+        
+        console.log("Database batch update successful");
+      } catch (error) {
+        console.error("Error saving item:", error);
+        toast({
+          title: "Error",
+          description: "Failed to save item. Please try again.",
+          variant: "destructive",
+        });
+      }
+      
+      // Update the UI with the recalculated items
+      setAgendaItems(recalculatedItems);
+      
+      // Store the ID of the item we just saved so we can scroll to it
+      setLastChangedItemId(itemId);
+      
+      // DEBUG MODE: Just close the form without refreshing from database
+      setShowItemForm(false);
+      setSelectedItem(null);
       
       return true; // Return success to the caller
     } catch (error: any) {
@@ -334,50 +582,6 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
       
       setManagerError(errorMessage);
       return false; // Return failure to the caller
-    }
-  }
-  
-  // Helper function to recalculate times for a specific day without moving items
-  async function recalculateTimesForDay(dayIndex: number) {
-    try {
-      // Get all items for this day
-      const dayItems = agendaItems.filter(item => item.dayIndex === dayIndex)
-        .sort((a, b) => a.order - b.order);
-      
-      if (dayItems.length === 0) return;
-      
-      // Get the first item to use as a reference
-      const firstItem = dayItems[0];
-      
-      // Call the API to recalculate times for this day only
-      const response = await fetch('/api/agenda-items/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          item: {
-            id: firstItem.id,
-            event_id: firstItem.event_id,
-            topic: firstItem.topic,
-            description: firstItem.description || "",
-            duration_minutes: firstItem.durationMinutes,
-            day_index: dayIndex,
-            order_position: firstItem.order,
-            start_time: firstItem.startTime,
-            end_time: firstItem.endTime
-          },
-          triggerFullRecalculation: false,
-          recalculateDayOnly: dayIndex, // Only recalculate this specific day
-          respectDayAssignments: true // Ensure items stay on assigned days
-        }),
-      });
-      
-      if (!response.ok) {
-        console.error("Error recalculating times for day:", await response.json());
-      }
-    } catch (error) {
-      console.error("Failed to recalculate times for day:", error);
     }
   }
 
@@ -414,50 +618,20 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6">
-      {/* Breadcrumb navigation */}
-      <nav className="flex items-center py-3 px-4 bg-muted/50 rounded-lg mb-2">
-        <ol className="flex items-center space-x-2">
-          <li>
-            <Link href="/" className="flex items-center text-sm hover:text-primary transition-colors">
-              <Home className="h-4 w-4 mr-1.5" />
-              <span>Home</span>
-            </Link>
-          </li>
-          <li className="flex items-center">
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mx-1" />
-            <Link href="/events" className="text-sm hover:text-primary transition-colors">
-              Events
-            </Link>
-          </li>
-          <li className="flex items-center">
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mx-1" />
-            <Link href={`/events/${eventId}`} className="text-sm hover:text-primary transition-colors truncate max-w-[200px]" title={event?.title || "Loading..."}>
-              {isLoading ? "Loading..." : event?.title}
-            </Link>
-          </li>
-          <li className="flex items-center">
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mx-1" />
-            <span className="text-sm font-medium text-primary">
-              Agenda
-            </span>
-          </li>
-        </ol>
-      </nav>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Back button instead of breadcrumb */}
+      <div className="py-3">
+        <Link href="/" className="flex items-center text-sm hover:text-primary transition-colors">
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          <span>Back to Events</span>
+        </Link>
+      </div>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-4">
-            {event?.logo_url && (
-              <div className="relative w-16 h-16">
-                <Image src={event.logo_url || "/placeholder.svg"} alt={event.title} fill className="object-contain" />
-              </div>
-            )}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{isLoading ? "Loading..." : event?.title}</h1>
-              {event?.subtitle && <p className="text-muted-foreground">{event.subtitle}</p>}
-            </div>
-          </div>
+        <div>
+          {/* Smaller event title with no logo */}
+          <h1 className="text-2xl font-bold tracking-tight">{isLoading ? "Loading..." : event?.title}</h1>
+          {event?.subtitle && <p className="text-muted-foreground">{event.subtitle}</p>}
         </div>
         <div className="flex gap-2">
           <ThemeToggle />
@@ -512,7 +686,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         <AgendaItemForm 
           eventId={eventId} 
           item={selectedItem} 
-          onClose={handleFormClose}
+          onClose={() => handleFormClose()}
           onSave={handleSaveItem}
           adhereToTimeRestrictions={adhereToTimeRestrictions}
         />
@@ -524,6 +698,11 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
           onReorder={handleReorderItems}
           onAddAtPosition={handleAddItemAtPosition}
           adhereToTimeRestrictions={adhereToTimeRestrictions}
+          totalDays={totalDays}
+          scrollToItemId={lastChangedItemId}
+          onItemScrolled={() => setLastChangedItemId(null)}
+          eventEndTime={eventEndTime}
+          eventStartTime={eventStartTime}
         />
       )}
       <ErrorDialog title="Agenda Manager Error" error={managerError} onClose={() => setManagerError(null)} />

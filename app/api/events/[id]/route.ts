@@ -14,10 +14,11 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  console.log(`PUT /api/events/${params.id} - Starting`)
+  // Properly await params.id before using it
+  const id = await Promise.resolve(params.id);
+  console.log(`PUT /api/events/${id} - Starting`)
 
   try {
-    const { id } = params
     const eventData = await request.json()
 
     console.log(`Updating event ${id} with data:`, eventData)
@@ -68,7 +69,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
+    // Properly await params.id before using it
+    const id = await Promise.resolve(params.id);
 
     console.log(`Deleting event ${id}`)
 
@@ -92,7 +94,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
+    // Properly await params.id before using it
+    const id = await Promise.resolve(params.id);
     
     // Fetch the event
     const { data: event, error: eventError } = await supabaseAdmin
@@ -152,7 +155,8 @@ export async function PATCH(
 ) {
   try {
     const data = await request.json()
-    const { id } = params
+    // Properly await params.id before using it
+    const id = await Promise.resolve(params.id);
 
     // Validate if there's anything to update
     if (Object.keys(data).length === 0) {

@@ -1,0 +1,12 @@
+---
+description: these are fundamentals rules that you have to follow
+globs: 
+alwaysApply: false
+---
+Do not restart servers, tell me to do so.  
+
+Focus on the task/problem at hand, do not stumble upon other potential problems or improvements as we are working on something else, feel free to mention them in the chat but do not make changes.
+
+do not rush to the solution to a problem, you often end up not able to think about something else and correct yourself when you are wrong.  You tend to stay on that wrong path and are very hard to redirect.  Don't do this, listen to me and follow my advice. From a logic, approach, or high-level best practice standpint - I am very good.  Feel free to ask for my advice.
+
+REALLY IMPORTANT: dont add functionality to a bunch of separate individual needs that would better suited as a helper function (so that all individual needs for it can use a common function). Less code to maintain, a clearer separation of interests, and less chance for errors.

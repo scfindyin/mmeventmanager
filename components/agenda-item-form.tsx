@@ -16,6 +16,7 @@ import { differenceInDays, addDays, format } from "date-fns"
 import { ErrorDialog } from "@/components/error-dialog"
 import { dbStringToDate } from "@/lib/utils"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { printTypeInfo, ensureNumber } from "@/lib/debug-utils"
 
 const formSchema = z.object({
   topic: z.string().min(2, "Topic must be at least 2 characters"),
@@ -142,8 +143,13 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
     if (!adhereToTimeRestrictions || !event) return true;
     
     // Calculate current day's available time
-    const dayStartTime = event.start_time || "09:00";
-    const dayEndTime = event.end_time || "17:00";
+    const dayStartTime = event.start_time;
+    const dayEndTime = event.end_time;
+    
+    if (!dayStartTime || !dayEndTime) {
+      console.error("Missing required event times:", { dayStartTime, dayEndTime });
+      throw new Error("Event start and end times are required");
+    }
     
     // Convert times to minutes since midnight
     const [startHours, startMinutes] = dayStartTime.split(':').map(Number);
@@ -183,6 +189,13 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
     setIsSubmitting(true);
 
     try {
+      console.log("Form submitted with data:", data);
+      
+      // Convert dayIndex to a number to ensure it's the right type
+      const dayIndex = ensureNumber(data.dayIndex, 0);
+      
+      printTypeInfo("Form submission dayIndex", dayIndex);
+      
       // Format the item with form data
       const itemToSave: AgendaItem = {
         id: item?.id || '',
@@ -190,7 +203,7 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
         topic: data.topic,
         description: data.description || '',
         durationMinutes: data.durationMinutes,
-        dayIndex: data.dayIndex,
+        dayIndex: dayIndex,
         order: item?.order || 0, // Default order
         startTime: item?.startTime || '',
         endTime: item?.endTime || '',
@@ -198,8 +211,8 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
 
       // If we're changing the day for an existing item or it's a new item,
       // set order to -1 to signal it should be placed at the end of the day
-      if ((item?.id && item.dayIndex !== data.dayIndex) || !item?.id) {
-        console.log(`Setting order to -1 for item moved to day ${data.dayIndex} or new item`);
+      if ((item?.id && item.dayIndex !== dayIndex) || !item?.id) {
+        console.log(`Setting order to -1 for item moved to day ${dayIndex} or new item`);
         itemToSave.order = -1;
       } else if (item?.order !== undefined) {
         // If we have a selected item with a defined order and not changing day, carry that over
@@ -365,7 +378,9 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
                     <FormLabel>Day</FormLabel>
                     <Select
                       onValueChange={(value) => {
-                        const dayIndex = Number.parseInt(value);
+                        printTypeInfo("Day selection value", value);
+                        const dayIndex = ensureNumber(value, 0);
+                        printTypeInfo("Converted dayIndex", dayIndex);
                         field.onChange(dayIndex);
                         checkTimeRestrictions(dayIndex, form.getValues('durationMinutes'));
                       }}
@@ -395,7 +410,7 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : item?.id ? "Update Item" : "Add Item"}
+                {isSubmitting ? "Saving..." : (item?.id && !item.id.startsWith('temp-')) ? "Update Item" : "Add Item"}
               </Button>
             </div>
           </form>

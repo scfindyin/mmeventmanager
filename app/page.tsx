@@ -1,87 +1,48 @@
 import { EventDashboard } from "@/components/event-dashboard"
-import { createSetupFunctions } from "@/lib/setup-functions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
-
-// This is a server component, so we can run setup code here
+// This is a server component
 export default async function Home() {
   // Check if Supabase environment variables are set
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  let setupError = null;
-  let missingEnvVars = false;
   
+  // Only check for missing environment variables
   if (!supabaseUrl || !supabaseKey || supabaseUrl === 'https://example.supabase.co') {
-    missingEnvVars = true;
-  } else {
-    try {
-      // Try to create the setup functions in Supabase
-      await createSetupFunctions()
-    } catch (error) {
-      console.error("Error in setup:", error)
-      setupError = error;
-      // Continue with the app even if setup fails
-      // The dashboard will handle showing setup UI if needed
-    }
+    return (
+      <div className="container mx-auto py-8">
+        <h1 className="text-4xl font-bold mb-6">Event Agenda Manager</h1>
+        <Alert className="mb-6" variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Missing Supabase Configuration</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">
+              Please update your <code className="bg-gray-100 px-1 py-0.5 rounded">.env.local</code> file with your Supabase credentials.
+            </p>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li>Log in to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Supabase Dashboard</a></li>
+              <li>Select your project or create a new one</li>
+              <li>Go to Project Settings &gt; API</li>
+              <li>Copy the "Project URL" and "anon/public" API key</li>
+              <li>Update the .env.local file with these values</li>
+              <li>Restart the development server</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+        <HomePageContent />
+      </div>
+    );
   }
-
+    
   try {
-    if (missingEnvVars) {
-      return (
-        <div className="container mx-auto py-8">
-          <h1 className="text-4xl font-bold mb-6">Event Agenda Manager</h1>
-          <Alert className="mb-6" variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Missing Supabase Configuration</AlertTitle>
-            <AlertDescription>
-              <p className="mb-2">
-                Please update your <code className="bg-gray-100 px-1 py-0.5 rounded">.env.local</code> file with your Supabase credentials.
-              </p>
-              <ol className="list-decimal pl-5 space-y-1">
-                <li>Log in to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Supabase Dashboard</a></li>
-                <li>Select your project or create a new one</li>
-                <li>Go to Project Settings &gt; API</li>
-                <li>Copy the "Project URL" and "anon/public" API key</li>
-                <li>Update the .env.local file with these values</li>
-                <li>Restart the development server</li>
-              </ol>
-            </AlertDescription>
-          </Alert>
-          <HomePageContent />
-        </div>
-      );
-    }
-    
-    if (setupError) {
-      return (
-        <div className="container mx-auto py-8">
-          <h1 className="text-4xl font-bold mb-6">Event Agenda Manager</h1>
-          <Alert className="mb-6" variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Supabase Setup Error</AlertTitle>
-            <AlertDescription>
-              <p className="mb-2">There was an error setting up the Supabase database:</p>
-              <pre className="bg-gray-100 p-3 rounded text-sm overflow-auto">
-                {setupError instanceof Error ? setupError.message : String(setupError)}
-              </pre>
-              <p className="mt-2">Please check your Supabase configuration and permissions.</p>
-            </AlertDescription>
-          </Alert>
-          <HomePageContent />
-        </div>
-      );
-    }
-    
     return (
       <main className="min-h-screen p-4 md:p-6 lg:p-8">
         <EventDashboard />
-     </main>
-            
+      </main>
     )
   } catch (error) {
     console.error("Error rendering main page:", error);

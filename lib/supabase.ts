@@ -20,10 +20,11 @@ let supabaseInstance: ReturnType<typeof createClient> | null = null
 export function getSupabaseClient() {
   if (supabaseInstance) return supabaseInstance
 
-  supabaseInstance = createClient(supabaseUrl || "", supabaseKey || "", {
-    db: {
-      schema: "public",
-    },
+  // In test environment, use mock URL and key
+  const url = process.env.NODE_ENV === 'test' ? 'http://localhost:54321' : supabaseUrl || ""
+  const key = process.env.NODE_ENV === 'test' ? 'test-key' : supabaseKey || ""
+
+  supabaseInstance = createClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,

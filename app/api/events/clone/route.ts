@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       .from("agenda_items")
       .select("*")
       .eq("event_id", eventId)
-      .order("position")
+      .order("order_position")
 
     if (agendaError) {
       console.error("Error fetching agenda items to clone:", agendaError)
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
           .from("agenda_items")
           .select("id")
           .eq("event_id", newEvent.id)
-          .eq("position", originalItem.position)
+          .eq("order_position", originalItem.order_position)
           .single()
 
         if (newItemError) continue
