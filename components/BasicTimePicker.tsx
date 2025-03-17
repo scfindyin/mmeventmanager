@@ -83,10 +83,10 @@ export default function BasicTimePicker({
     }
   };
   
-  // Generate time options in 30-minute increments
+  // Generate time options in 15-minute increments
   const timeOptions = [];
   for (let hour = 0; hour < 24; hour++) {
-    for (let minute of [0, 30]) {
+    for (let minute of [0, 15, 30, 45]) {
       const formattedHour = String(hour).padStart(2, '0');
       const formattedMinute = String(minute).padStart(2, '0');
       const timeValue = `${formattedHour}:${formattedMinute}`;

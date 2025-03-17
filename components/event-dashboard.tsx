@@ -146,7 +146,7 @@ export function EventDashboard() {
     return (
       <div className="container mx-auto max-w-7xl">
         <div className="flex items-center justify-between mb-6 px-6">
-          <h1 className="text-6xl font-lilita dark:text-white">Events</h1>
+          <h1 className="text-3xl font-roboto font-bold dark:text-white">Event Manager</h1>
           <ThemeToggle />
         </div>
         <div className="flex items-center justify-center h-64">
@@ -162,7 +162,7 @@ export function EventDashboard() {
   return (
     <div className="container mx-auto max-w-7xl">
       <div className="flex items-center justify-between mb-6 px-6">
-        <h1 className="text-6xl font-lilita dark:text-white">Events</h1>
+        <h1 className="text-3xl font-roboto font-bold dark:text-white">Event Manager</h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button onClick={handleCreateEvent}>

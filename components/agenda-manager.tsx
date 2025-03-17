@@ -43,6 +43,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   const [lastChangedItemId, setLastChangedItemId] = useState<string | null>(null)
   const [eventEndTime, setEventEndTime] = useState<string>("")
   const [eventStartTime, setEventStartTime] = useState<string>("")
+  const [eventStartDate, setEventStartDate] = useState<string>("")
   const previousItems = useRef<AgendaItem[]>([])
 
   useEffect(() => {
@@ -100,10 +101,11 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         if (startDateStr && endDateStr) {
           const startDate = new Date(startDateStr);
           const endDate = new Date(endDateStr);
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
-        setTotalDays(diffDays);
-        console.log(`Total days calculated: ${diffDays}`);
+          const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+          setTotalDays(diffDays);
+          setEventStartDate(startDateStr);
+          console.log(`Total days calculated: ${diffDays}`);
         } else {
           // If we still can't get valid dates, default to 3 days
           console.log("Could not calculate days from dates, using default of 3");
@@ -253,30 +255,14 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   }
 
   function handleEditItem(item: AgendaItem) {
-    // Save current scroll position before changing state
-    const scrollPosition = window.scrollY;
-    
-    // Set selected item and show form
+    // Simply set selected item and show form - no scroll handling needed
     setSelectedItem(item);
     setShowItemForm(true);
-    
-    // Use requestAnimationFrame to restore scroll position after state update
-    requestAnimationFrame(() => {
-      window.scrollTo(0, scrollPosition);
-      
-      // Double-check scroll position after a short delay
-      setTimeout(() => {
-        window.scrollTo(0, scrollPosition);
-      }, 10);
-    });
   }
 
   function handleFormClose() {
-    setShowItemForm(false)
-    setSelectedItem(null)
-    
-    // Remove the database refresh - UI is already updated
-    // fetchEventAndAgenda()
+    setShowItemForm(false);
+    setSelectedItem(null);
   }
 
   const handleReorderItems = async (items: AgendaItem[], skipRefresh: boolean = false) => {
@@ -402,9 +388,6 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
 
   async function handleSaveItem(item: AgendaItem) {
     try {
-      // Save current scroll position immediately
-      const scrollPosition = window.scrollY;
-      
       console.log("handleSaveItem called with:", item);
       
       // Check if this is a new item with a temp ID
@@ -531,67 +514,56 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         eventStartTime
       );
       
-      // Close the form first
+      // First update UI with locally recalculated times
+      setAgendaItems(recalculatedItems);
+      
+      // Store the ID of the item we just saved so we can scroll to it
+      setLastChangedItemId(itemId);
+      
+      // Close the form without waiting for database update
       setShowItemForm(false);
       setSelectedItem(null);
       
-      // Restore scroll position immediately
-      window.scrollTo(0, scrollPosition);
-      
-      // Short delay before updating UI to ensure scroll position is maintained
-      setTimeout(() => {
-        // Update the UI with the recalculated items (client-side update)
-        setAgendaItems(recalculatedItems);
+      // Then update database in background (optimistic update)
+      try {
+        // Single batch update for all items including the new/edited one
+        const batchResponse = await fetch(`/api/events/${eventId}/items/batch-order`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            movedItemId: itemId,
+            items: recalculatedItems.map(item => ({
+              id: item.id,
+              event_id: item.event_id,
+              topic: item.topic || "Untitled Item",
+              description: item.description || "",
+              duration_minutes: item.durationMinutes,
+              day_index: item.dayIndex,
+              order_position: item.order,
+              start_time: item.startTime || "00:00",
+              end_time: item.endTime || "00:00"
+            }))
+          }),
+        });
         
-        // Store the ID of the item we just saved so we can scroll to it
-        setLastChangedItemId(itemId);
-        
-        // Restore scroll position again after state update
-        window.scrollTo(0, scrollPosition);
-        
-        // THEN update the database in the background (optimistic update)
-        try {
-          // Single batch update for all items including the new/edited one
-          fetch(`/api/events/${eventId}/items/batch-order`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              movedItemId: itemId,
-              items: recalculatedItems.map(item => ({
-                id: item.id,
-                event_id: item.event_id,
-                topic: item.topic || "Untitled Item",
-                description: item.description || "",
-                duration_minutes: item.durationMinutes,
-                day_index: item.dayIndex,
-                order_position: item.order,
-                start_time: item.startTime || "00:00",
-                end_time: item.endTime || "00:00"
-              }))
-            }),
-          }).then(response => {
-            if (!response.ok) {
-              return response.json().then(errorData => {
-                const errorMessage = errorData.error || 'Failed to update items';
-                console.error("Batch update error details:", errorData);
-                throw new Error(errorMessage);
-              });
-            }
-            console.log("Database batch update successful");
-          }).catch(error => {
-            console.error("Error saving item to database:", error);
-            toast({
-              title: "Error",
-              description: "Changes saved locally but failed to update the database. Please refresh the page.",
-              variant: "destructive",
-            });
-          });
-        } catch (error) {
-          console.error("Error initiating save to database:", error);
+        if (!batchResponse.ok) {
+          const errorData = await batchResponse.json().catch(() => ({}));
+          const errorMessage = errorData.error || 'Failed to update items';
+          console.error("Batch update error details:", errorData);
+          throw new Error(errorMessage);
         }
-      }, 10);
+        
+        console.log("Database batch update successful");
+      } catch (error) {
+        console.error("Error saving item to database:", error);
+        toast({
+          title: "Error",
+          description: "Changes saved locally but failed to update the database. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
       
       return true; // Return success to the caller
     } catch (error: any) {
@@ -655,21 +627,17 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         </Link>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between">
+        <div className="mr-8">
           {/* Smaller event title with no logo */}
           <h1 className="text-2xl font-bold tracking-tight">{isLoading ? "Loading..." : event?.title}</h1>
           {event?.subtitle && <p className="text-muted-foreground">{event.subtitle}</p>}
         </div>
         <div className="flex gap-2">
           <ThemeToggle />
-          <Button variant="outline" onClick={handleGeneratePDF}>
+          <Button onClick={handleGeneratePDF}>
             <Download className="mr-2 h-4 w-4" />
             Export PDF
-          </Button>
-          <Button onClick={handleAddItem}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
           </Button>
         </div>
       </div>
@@ -710,29 +678,33 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         </TooltipProvider>
       </div>
 
-      {showItemForm ? (
-        <AgendaItemForm 
-          eventId={eventId} 
-          item={selectedItem} 
-          onClose={() => handleFormClose()}
-          onSave={handleSaveItem}
-          adhereToTimeRestrictions={adhereToTimeRestrictions}
-        />
-      ) : (
-        <AgendaItemList
-          items={agendaItems}
-          isLoading={isLoading}
-          onEdit={handleEditItem}
-          onReorder={handleReorderItems}
-          onAddAtPosition={handleAddItemAtPosition}
-          adhereToTimeRestrictions={adhereToTimeRestrictions}
-          totalDays={totalDays}
-          scrollToItemId={lastChangedItemId}
-          onItemScrolled={() => setLastChangedItemId(null)}
-          eventEndTime={eventEndTime}
-          eventStartTime={eventStartTime}
-        />
-      )}
+      {/* Always render AgendaItemList - it remains in the DOM */}
+      <AgendaItemList
+        items={agendaItems}
+        isLoading={isLoading}
+        onEdit={handleEditItem}
+        onReorder={handleReorderItems}
+        onAddAtPosition={handleAddItemAtPosition}
+        adhereToTimeRestrictions={adhereToTimeRestrictions}
+        totalDays={totalDays}
+        scrollToItemId={lastChangedItemId}
+        onItemScrolled={() => setLastChangedItemId(null)}
+        eventEndTime={eventEndTime}
+        eventStartTime={eventStartTime}
+        eventStartDate={eventStartDate}
+      />
+      
+      {/* Always render AgendaItemForm, but conditionally show it */}
+      {/* The form component itself handles open/closed state */}
+      <AgendaItemForm 
+        eventId={eventId} 
+        item={selectedItem} 
+        onClose={() => handleFormClose()}
+        onSave={handleSaveItem}
+        adhereToTimeRestrictions={adhereToTimeRestrictions}
+        isOpen={showItemForm} // New prop to control visibility
+      />
+      
       <ErrorDialog title="Agenda Manager Error" error={managerError} onClose={() => setManagerError(null)} />
     </div>
   )

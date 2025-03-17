@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid"
 import { recalculateAgendaTimes } from "@/lib/agenda-recalculation"
 import { agendaService } from "@/lib/services/agenda-service"
 import { useAgendaOperations } from "@/hooks/use-agenda-operations"
+import { format, addDays } from "date-fns"
 
 // Helper function to format time in 12-hour format
 function formatTo12Hour(time24: string): string {
@@ -43,6 +44,7 @@ interface AgendaItemListProps {
   onItemScrolled?: () => void
   eventEndTime: string
   eventStartTime: string
+  eventStartDate?: string
 }
 
 interface ApiResponse {
@@ -105,7 +107,8 @@ export function AgendaItemList({
   scrollToItemId,
   onItemScrolled,
   eventEndTime,
-  eventStartTime
+  eventStartTime,
+  eventStartDate
 }: AgendaItemListProps) {
   const [currentItems, setCurrentItems] = useState<AgendaItem[]>(items)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -458,6 +461,20 @@ export function AgendaItemList({
     }
   }
 
+  // Function to format the date for each day
+  const formatDayDate = (dayIndex: number) => {
+    if (!eventStartDate) return null;
+    
+    try {
+      const startDate = new Date(eventStartDate);
+      const currentDate = addDays(startDate, dayIndex);
+      return format(currentDate, "MMMM d, yyyy");
+    } catch (error) {
+      console.error("Error formatting day date:", error);
+      return null;
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -476,7 +493,7 @@ export function AgendaItemList({
     )
   }
 
-  if (currentItems.length === 0) {
+  if (currentItems.length === 0 && (!totalDays || totalDays <= 0)) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Clock className="h-12 w-12 text-muted-foreground mb-4" />
@@ -506,14 +523,20 @@ export function AgendaItemList({
         data-testid="drag-drop-context"
         onDragEnd={handleDragEnd}
       >
-      {Array.from({ length: totalDays || Math.max(...Object.keys(itemsByDay).map(Number)) + 1 }).map((_, dayIndex) => {
+      {Array.from({ length: totalDays || Math.max(...Object.keys(itemsByDay).map(Number), 0) + 1 }).map((_, dayIndex) => {
         const dayItems = itemsByDay[dayIndex]?.sort((a, b) => a.order - b.order) || [];
+        const formattedDate = formatDayDate(dayIndex);
 
         return (
           <div key={dayIndex} className="space-y-2">
               <div className="flex flex-col">
                 <h2 className="text-xl font-semibold flex items-center px-4 py-2 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-md">
-                  <span>Day {dayIndex + 1}</span>
+                  <span className="mr-2">Day {dayIndex + 1}</span>
+                  {formattedDate && (
+                    <>
+                      <span> - {formattedDate}</span>
+                    </>
+                  )}
                 </h2>
                 {onAddAtPosition && (
                   <div 
@@ -540,7 +563,7 @@ export function AgendaItemList({
                       snapshot.isDraggingOver 
                         ? 'bg-primary/10 border-2 border-dashed border-primary/50' 
                         : 'border-2 border-dashed border-transparent'
-                    }`}
+                    } ${dayItems.length === 0 ? 'min-h-[80px]' : ''}`}
                   >
                     {dayItems.map((item, index) => (
                       <Fragment key={item.id}>
@@ -562,7 +585,7 @@ export function AgendaItemList({
                               <Card 
                                 className={`relative transition-all duration-300 shadow-md hover:shadow-lg dark:shadow-[2px_4px_16px_rgba(0,0,0,0.6),-1px_-1px_10px_rgba(130,180,255,0.4)] cursor-pointer ${
                                   adhereToTimeRestrictions && checkTimeExceeded(item) 
-                                    ? 'border-red-400' 
+                                    ? 'border-red-400 bg-red-50/25 dark:bg-red-950/5' 
                                     : selectedItemId === item.id
                                       ? 'border-l-[5px] border-l-primary pl-1 bg-primary/5' 
                                       : snapshot.isDragging 
@@ -590,8 +613,8 @@ export function AgendaItemList({
                                 </div>
                               </div>
                               <CardHeader className="pb-2 pl-10">
-                                <div className="flex items-center justify-between">
-                                  <CardTitle className="text-lg">{item.topic}</CardTitle>
+                                <div className="flex items-start justify-between">
+                                  <CardTitle className="text-lg mr-4">{item.topic}</CardTitle>
                                   <div className="flex items-center gap-1">
                                     <Button
                                       variant="outline"

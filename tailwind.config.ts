@@ -59,6 +59,7 @@ const config = {
         dancing: ["var(--font-dancing)"],
         comforter: ["var(--font-comforter)"],
         lilita: ["var(--font-lilita)"],
+        roboto: ["var(--font-roboto-flex)"],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

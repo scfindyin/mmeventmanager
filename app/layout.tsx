@@ -2,7 +2,7 @@ import type React from "react"
 import "@/app/globals.css"
 import { Dancing_Script } from "next/font/google"
 import { Comforter } from "next/font/google"
-import { Noto_Sans, Lilita_One } from "next/font/google"
+import { Noto_Sans, Lilita_One, Roboto_Flex } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
@@ -25,6 +25,10 @@ const lilitaOne = Lilita_One({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-lilita"
+})
+const robotoFlex = Roboto_Flex({
+  subsets: ["latin"],
+  variable: "--font-roboto-flex"
 })
 
 export const metadata = {
@@ -154,7 +158,14 @@ export default function RootLayout({
           `
         }} />
       </head>
-      <body className={`font-sans ${notoSans.variable} ${dancingScript.variable} ${comforter.variable} ${lilitaOne.variable} bg-background relative overflow-x-hidden`}>
+      <body className={cn(
+        "min-h-screen bg-background font-sans antialiased",
+        notoSans.variable,
+        dancingScript.variable,
+        comforter.variable,
+        lilitaOne.variable,
+        robotoFlex.variable
+      )}>
         {/* Glow effect removed
         <div className="absolute bottom-0 left-0 right-0 w-full h-[70vh] pointer-events-none overflow-hidden z-0">
           <div 

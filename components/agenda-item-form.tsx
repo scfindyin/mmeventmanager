@@ -48,9 +48,17 @@ interface AgendaItemFormProps {
   onClose: () => void
   onSave: (item: AgendaItem) => Promise<boolean>
   adhereToTimeRestrictions?: boolean
+  isOpen?: boolean
 }
 
-export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRestrictions = true }: AgendaItemFormProps) {
+export function AgendaItemForm({ 
+  eventId, 
+  item, 
+  onClose, 
+  onSave, 
+  adhereToTimeRestrictions = true,
+  isOpen = false
+}: AgendaItemFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [event, setEvent] = useState<any>(null)
   const [days, setDays] = useState<{ value: number; label: string }[]>([])
@@ -268,24 +276,33 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
     }
   };
 
+  // Add a new useEffect to reset submitting state when dialog opens/closes
+  useEffect(() => {
+    // Reset the submitting state whenever the dialog opens or closes
+    setIsSubmitting(false);
+  }, [isOpen]);
+
   return (
-    <Dialog open={true} onOpenChange={() => {
-      // Save current scroll position
-      const scrollPos = window.scrollY;
-      
-      // Close the dialog
-      onClose();
-      
-      // Restore scroll position after a small delay
-      setTimeout(() => {
-        window.scrollTo(0, scrollPos);
-      }, 100);
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        // Reset the submitting state when dialog is closed
+        setIsSubmitting(false);
+        onClose();
+      }
     }}>
       <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
-          <DialogTitle>{item ? "Edit" : "Add"} Agenda Item</DialogTitle>
+          <DialogTitle>
+            {item?.id && !item.id.startsWith('temp-') 
+              ? "Edit Agenda Item" 
+              : "Add New Item"
+            }
+          </DialogTitle>
           <DialogDescription>
-            {item ? "Update the details of this agenda item." : "Add a new item to the agenda."}
+            {item?.id && !item.id.startsWith('temp-') 
+              ? "Update the details of this agenda item." 
+              : "Add a new item to the agenda."
+            }
           </DialogDescription>
         </DialogHeader>
         
