@@ -253,16 +253,30 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   }
 
   function handleEditItem(item: AgendaItem) {
-    setSelectedItem(item)
-    setShowItemForm(true)
+    // Save current scroll position before changing state
+    const scrollPosition = window.scrollY;
+    
+    // Set selected item and show form
+    setSelectedItem(item);
+    setShowItemForm(true);
+    
+    // Use requestAnimationFrame to restore scroll position after state update
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPosition);
+      
+      // Double-check scroll position after a short delay
+      setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+      }, 10);
+    });
   }
 
   function handleFormClose() {
     setShowItemForm(false)
     setSelectedItem(null)
     
-    // Refresh data from the database
-    fetchEventAndAgenda()
+    // Remove the database refresh - UI is already updated
+    // fetchEventAndAgenda()
   }
 
   const handleReorderItems = async (items: AgendaItem[], skipRefresh: boolean = false) => {
@@ -388,6 +402,9 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
 
   async function handleSaveItem(item: AgendaItem) {
     try {
+      // Save current scroll position immediately
+      const scrollPosition = window.scrollY;
+      
       console.log("handleSaveItem called with:", item);
       
       // Check if this is a new item with a temp ID
@@ -514,56 +531,67 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         eventStartTime
       );
       
-      // Make the database API call with all normalized items and recalculated times
-      try {
-        // Single batch update for all items including the new/edited one
-        const batchResponse = await fetch(`/api/events/${eventId}/items/batch-order`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            movedItemId: itemId,
-            items: recalculatedItems.map(item => ({
-              id: item.id,
-              event_id: item.event_id,
-              topic: item.topic || "Untitled Item",
-              description: item.description || "",
-              duration_minutes: item.durationMinutes,
-              day_index: item.dayIndex,
-              order_position: item.order,
-              start_time: item.startTime || "00:00",
-              end_time: item.endTime || "00:00"
-            }))
-          }),
-        });
-        
-        if (!batchResponse.ok) {
-          const errorData = await batchResponse.json().catch(() => ({}));
-          const errorMessage = errorData.error || 'Failed to update items';
-          console.error("Batch update error details:", errorData);
-          throw new Error(errorMessage);
-        }
-        
-        console.log("Database batch update successful");
-      } catch (error) {
-        console.error("Error saving item:", error);
-        toast({
-          title: "Error",
-          description: "Failed to save item. Please try again.",
-          variant: "destructive",
-        });
-      }
-      
-      // Update the UI with the recalculated items
-      setAgendaItems(recalculatedItems);
-      
-      // Store the ID of the item we just saved so we can scroll to it
-      setLastChangedItemId(itemId);
-      
-      // DEBUG MODE: Just close the form without refreshing from database
+      // Close the form first
       setShowItemForm(false);
       setSelectedItem(null);
+      
+      // Restore scroll position immediately
+      window.scrollTo(0, scrollPosition);
+      
+      // Short delay before updating UI to ensure scroll position is maintained
+      setTimeout(() => {
+        // Update the UI with the recalculated items (client-side update)
+        setAgendaItems(recalculatedItems);
+        
+        // Store the ID of the item we just saved so we can scroll to it
+        setLastChangedItemId(itemId);
+        
+        // Restore scroll position again after state update
+        window.scrollTo(0, scrollPosition);
+        
+        // THEN update the database in the background (optimistic update)
+        try {
+          // Single batch update for all items including the new/edited one
+          fetch(`/api/events/${eventId}/items/batch-order`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              movedItemId: itemId,
+              items: recalculatedItems.map(item => ({
+                id: item.id,
+                event_id: item.event_id,
+                topic: item.topic || "Untitled Item",
+                description: item.description || "",
+                duration_minutes: item.durationMinutes,
+                day_index: item.dayIndex,
+                order_position: item.order,
+                start_time: item.startTime || "00:00",
+                end_time: item.endTime || "00:00"
+              }))
+            }),
+          }).then(response => {
+            if (!response.ok) {
+              return response.json().then(errorData => {
+                const errorMessage = errorData.error || 'Failed to update items';
+                console.error("Batch update error details:", errorData);
+                throw new Error(errorMessage);
+              });
+            }
+            console.log("Database batch update successful");
+          }).catch(error => {
+            console.error("Error saving item to database:", error);
+            toast({
+              title: "Error",
+              description: "Changes saved locally but failed to update the database. Please refresh the page.",
+              variant: "destructive",
+            });
+          });
+        } catch (error) {
+          console.error("Error initiating save to database:", error);
+        }
+      }, 10);
       
       return true; // Return success to the caller
     } catch (error: any) {

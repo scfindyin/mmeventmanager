@@ -54,6 +54,15 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        dancing: ["var(--font-dancing)"],
+        comforter: ["var(--font-comforter)"],
+        lilita: ["var(--font-lilita)"],
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

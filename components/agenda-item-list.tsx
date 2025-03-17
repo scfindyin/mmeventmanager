@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Fragment, useRef } from "react"
+import { useState, useEffect, Fragment, useRef, useCallback } from "react"
 import { Edit, Trash, GripVertical, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Clock, Plus, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Minus, CopyPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -66,6 +66,34 @@ interface DatabaseItem {
   end_time: string;
 }
 
+// Additional utility for handling problematic button clicks
+const useSafeButtonClick = () => {
+  const handleSafeSplit = (e: React.MouseEvent, callback: () => any) => {
+    // Prevent default behavior and stop propagation
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Save the current scroll position
+    const scrollPos = window.scrollY;
+    
+    // Execute in a setTimeout to break event chain
+    setTimeout(async () => {
+      try {
+        // Wrap the callback in Promise.resolve to handle both Promise and non-Promise returns
+        await Promise.resolve(callback());
+        // Restore scroll position after a small delay
+        setTimeout(() => window.scrollTo(0, scrollPos), 0);
+      } catch (err) {
+        console.error("Error in button operation:", err);
+        // Still restore scroll position
+        setTimeout(() => window.scrollTo(0, scrollPos), 0);
+      }
+    }, 0);
+  };
+  
+  return { handleSafeSplit };
+};
+
 export function AgendaItemList({ 
   items, 
   isLoading: isLoadingProp, 
@@ -82,9 +110,13 @@ export function AgendaItemList({
   const [currentItems, setCurrentItems] = useState<AgendaItem[]>(items)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<AgendaItem | null>(null)
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const { toast } = useToast()
   const [listError, setListError] = useState<Error | string | null>(null)
   const itemRefs = useRef<Record<string, HTMLDivElement>>({})
+  
+  // Use our utility for safe button operations
+  const { handleSafeSplit } = useSafeButtonClick();
   
   // Use our new hook with all operations
   const {
@@ -105,6 +137,17 @@ export function AgendaItemList({
     eventStartTime
   })
 
+  // Handle item selection
+  const handleSelectItem = (itemId: string) => {
+    const newSelectedId = selectedItemId === itemId ? null : itemId;
+    setSelectedItemId(newSelectedId);
+    
+    // If selecting an item (not deselecting), scroll it into view
+    if (newSelectedId) {
+      scrollItemIntoView(newSelectedId);
+    }
+  }
+
   // Combine loading states
   const isLoading = isLoadingProp || isOperationLoading
 
@@ -114,7 +157,8 @@ export function AgendaItemList({
       const element = itemRefs.current[itemId]
       if (element) {
         console.log("Scrolling item into view:", itemId)
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Use scrollIntoView with different options
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
         // Notify parent that we've scrolled
         if (onItemScrolled) onItemScrolled()
       }
@@ -184,48 +228,6 @@ export function AgendaItemList({
     return exceeds;
   };
 
-  // Check for items exceeding time limits and show a toast notification
-  useEffect(() => {
-    if (!adhereToTimeRestrictions || currentItems.length === 0) return;
-    
-    // Find any items that exceed their day's time limit
-    const exceededItems = currentItems.filter(item => checkTimeExceeded(item));
-    
-    if (exceededItems.length > 0) {
-      // Get the day numbers (1-indexed for user display)
-      const dayNumbers = [...new Set(exceededItems.map(item => item.dayIndex + 1))].sort();
-      
-      // Create a user-friendly message
-      let message = "";
-      if (dayNumbers.length === 1) {
-        message = `Day ${dayNumbers[0]} has ${exceededItems.length} item${exceededItems.length > 1 ? 's' : ''} that exceed${exceededItems.length === 1 ? 's' : ''} the day's time limit.`;
-      } else {
-        message = `Days ${dayNumbers.join(', ')} have items that exceed their time limits.`;
-      }
-      
-      // Show toast with extended duration (5 seconds = 5000ms)
-      toast({
-        title: "Time limit exceeded",
-        description: message,
-        variant: "destructive",
-        duration: 3500
-      });
-    }
-  }, [currentItems, adhereToTimeRestrictions, toast]);
-
-  // Add initial load recalculation
-  useEffect(() => {
-    if (items.length > 0 && !isLoading) {
-      // DEBUG MODE: Skip database calls
-      console.log("DEBUG: Skipping database initialization in AgendaItemList");
-      
-      // Just calculate times locally
-      const updatedItems = agendaService.calculateItemTimes(items, eventStartTime);
-      setCurrentItems(updatedItems);
-      onReorder(updatedItems);
-    }
-  }, []) // Empty dependency array means this runs once on mount
-
   // Wrapper functions to handle errors and UI updates
   const handleDeleteItem = async (id: string) => {
     try {
@@ -241,6 +243,9 @@ export function AgendaItemList({
 
   const handleSplitItem = async (item: AgendaItem) => {
     try {
+      // Save current scroll position
+      const scrollPos = window.scrollY;
+      
       // Calculate the order position for the new item
       const itemsInDay = currentItems.filter(i => i.dayIndex === item.dayIndex);
       const currentIndex = itemsInDay.findIndex(i => i.id === item.id);
@@ -256,8 +261,14 @@ export function AgendaItemList({
         order: newOrder
       };
 
-      // Update both items
-      await splitItem(item, newItem, currentItems);
+      // Update both items and get the IDs
+      const result = await splitItem(item, newItem, currentItems);
+      
+      // Restore the scroll position to prevent jumping to top
+      setTimeout(() => {
+        window.scrollTo(0, scrollPos);
+      }, 0);
+      
       return true;
     } catch (error) {
       return false;
@@ -267,6 +278,8 @@ export function AgendaItemList({
   const handleMoveItem = async (item: AgendaItem, direction: "up" | "down" | "top" | "bottom") => {
     try {
       await moveItemInDay(item, direction, currentItems)
+      // After moving, scroll the item into view
+      setTimeout(() => scrollItemIntoView(item.id), 100)
     } catch (error) {
       setListError(getErrorMessage(error))
     }
@@ -300,14 +313,125 @@ export function AgendaItemList({
       };
       
       await moveItemToDayOp(updatedItem, direction, currentItems, totalDays);
+      // After moving to another day, scroll the item into view
+      setTimeout(() => scrollItemIntoView(item.id), 100)
     } catch (error) {
       setListError(getErrorMessage(error));
     }
   }
 
+  // Memoize the event handlers to prevent dependency array issues
+  const memoizedHandleMove = useCallback((item: AgendaItem, direction: "up" | "down" | "top" | "bottom") => {
+    handleMoveItem(item, direction);
+  }, [handleMoveItem]);
+
+  const memoizedHandleMoveToDay = useCallback((item: AgendaItem, direction: "previous" | "next") => {
+    handleMoveItemToDay(item, direction);
+  }, [handleMoveItemToDay]);
+
+  const memoizedUpdateItem = useCallback((itemId: string, updates: Partial<AgendaItem>, currentItems: AgendaItem[]) => {
+    return updateItem(itemId, updates, currentItems);
+  }, [updateItem]);
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    // Only add keyboard listener if we have a selected item
+    if (!selectedItemId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedItemId) return;
+
+      // Find the selected item and its index
+      const selectedItem = currentItems.find(item => item.id === selectedItemId);
+      if (!selectedItem) return;
+
+      // Find items in the same day
+      const dayItems = currentItems
+        .filter(item => item.dayIndex === selectedItem.dayIndex)
+        .sort((a, b) => a.order - b.order);
+      
+      const currentIndex = dayItems.findIndex(item => item.id === selectedItemId);
+      if (currentIndex === -1) return;
+
+      // Handle arrow keys
+      switch (e.key) {
+        case 'ArrowUp':
+          if (currentIndex > 0) {
+            e.preventDefault();
+            memoizedHandleMove(selectedItem, "up");
+          }
+          break;
+        case 'ArrowDown':
+          if (currentIndex < dayItems.length - 1) {
+            e.preventDefault();
+            memoizedHandleMove(selectedItem, "down");
+          }
+          break;
+        case 'ArrowLeft':
+          // Subtract 15 minutes from duration (minimum 5 minutes)
+          e.preventDefault();
+          const newDurationDecrease = Math.max(5, selectedItem.durationMinutes - 15);
+          if (newDurationDecrease !== selectedItem.durationMinutes) {
+            memoizedUpdateItem(selectedItem.id, { durationMinutes: newDurationDecrease }, currentItems);
+          }
+          break;
+        case 'ArrowRight':
+          // Add 15 minutes to duration
+          e.preventDefault();
+          const newDurationIncrease = selectedItem.durationMinutes + 15;
+          memoizedUpdateItem(selectedItem.id, { durationMinutes: newDurationIncrease }, currentItems);
+          break;
+        case 'PageUp':
+          if (selectedItem.dayIndex > 0) {
+            e.preventDefault();
+            memoizedHandleMoveToDay(selectedItem, "previous");
+          }
+          break;
+        case 'PageDown':
+          if (typeof totalDays !== 'number' || (selectedItem.dayIndex + 1) < totalDays) {
+            e.preventDefault();
+            memoizedHandleMoveToDay(selectedItem, "next");
+          }
+          break;
+        case 'Home':
+          if (currentIndex > 0) {
+            e.preventDefault();
+            memoizedHandleMove(selectedItem, "top");
+          }
+          break;
+        case 'End':
+          if (currentIndex < dayItems.length - 1) {
+            e.preventDefault();
+            memoizedHandleMove(selectedItem, "bottom");
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItemId, currentItems, totalDays, memoizedHandleMove, memoizedHandleMoveToDay, memoizedUpdateItem]);
+
   const handleDragEnd = async (result: any) => {
     try {
+      // Prevent default browser behavior
+      if (result.destination) {
+        // Don't scroll to the top after drag ends
+        setTimeout(() => window.scrollTo(0, window.scrollY), 0);
+      }
+      
       await handleDragEndOp(result, currentItems)
+      
+      // After dragging, scroll the dragged item into view with different behavior
+      if (result.destination && result.draggableId) {
+        setTimeout(() => {
+          const element = itemRefs.current[result.draggableId];
+          if (element) {
+            // Use different scroll options that don't reset overall page position
+            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 100)
+      }
     } catch (error) {
       setListError(getErrorMessage(error))
     }
@@ -377,7 +501,7 @@ export function AgendaItemList({
     .sort((a, b) => a - b)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 agenda-item-list">
       <DragDropContext
         data-testid="drag-drop-context"
         onDragEnd={handleDragEnd}
@@ -388,13 +512,15 @@ export function AgendaItemList({
         return (
           <div key={dayIndex} className="space-y-2">
               <div className="flex flex-col">
-                <h2 className="text-xl font-semibold flex items-center">
+                <h2 className="text-xl font-semibold flex items-center px-4 py-2 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-md">
                   <span>Day {dayIndex + 1}</span>
                 </h2>
                 {onAddAtPosition && (
                   <div 
                     className="flex items-center justify-center my-2 group cursor-pointer"
-                    onClick={() => handleAddAtPosition(dayIndex, 0)}
+                    onClick={(e) => {
+                      handleSafeSplit(e, () => handleAddAtPosition(dayIndex, 0));
+                    }}
                   >
                     <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
                     <div className="mx-2 p-1 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
@@ -433,16 +559,30 @@ export function AgendaItemList({
                                   : ''
                               }`}
                             >
-                              <Card className={`relative transition-all duration-300 ${
-                                adhereToTimeRestrictions && checkTimeExceeded(item) 
-                                  ? 'border-red-400' 
-                                  : snapshot.isDragging 
-                                    ? 'border-primary ring-2 ring-primary/20' 
-                                    : ''
-                              }`}>
+                              <Card 
+                                className={`relative transition-all duration-300 shadow-md hover:shadow-lg dark:shadow-[2px_4px_16px_rgba(0,0,0,0.6),-1px_-1px_10px_rgba(130,180,255,0.4)] cursor-pointer ${
+                                  adhereToTimeRestrictions && checkTimeExceeded(item) 
+                                    ? 'border-red-400' 
+                                    : selectedItemId === item.id
+                                      ? 'border-l-[5px] border-l-primary pl-1 bg-primary/5' 
+                                      : snapshot.isDragging 
+                                        ? 'border-primary ring-2 ring-primary/20' 
+                                        : 'border-l-transparent border-l-[5px]'
+                                }`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  // Don't trigger selection when clicking buttons or drag handle
+                                  if ((e.target as HTMLElement).closest('button') || 
+                                      (e.target as HTMLElement).closest('[data-drag-handle]')) {
+                                    return;
+                                  }
+                                  handleSelectItem(item.id);
+                                }}
+                              >
                               <div className="absolute left-0 top-0 bottom-0 flex items-center px-2 text-muted-foreground">
                                   <div 
-                                    {...provided.dragHandleProps} 
+                                    {...provided.dragHandleProps}
+                                    data-drag-handle="true"
                                     className="cursor-grab active:cursor-grabbing hover:text-primary transition-colors"
                                     title="Drag to reorder or move between days"
                                   >
@@ -456,10 +596,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItemToDay(item, "previous")}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItemToDay(item, "previous");
+                                      }}
                                       disabled={item.dayIndex === 0}
                                       title="Move to previous day"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <Minus className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move to previous day</span>
@@ -468,10 +612,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItem(item, "top")}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItem(item, "top");
+                                      }}
                                       disabled={index === 0}
                                       title="Move to top of day"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <ChevronsUp className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move to top of day</span>
@@ -480,10 +628,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItem(item, "up")}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItem(item, "up");
+                                      }}
                                       disabled={index === 0}
                                       title="Move up one item"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <ChevronUp className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move up one item</span>
@@ -492,10 +644,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItem(item, "down")}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItem(item, "down");
+                                      }}
                                       disabled={index === dayItems.length - 1}
                                       title="Move down one item"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <ChevronDown className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move down one item</span>
@@ -504,10 +660,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItem(item, "bottom")}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItem(item, "bottom");
+                                      }}
                                       disabled={index === dayItems.length - 1}
                                       title="Move to bottom of day"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <ChevronsDown className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move to bottom of day</span>
@@ -516,10 +676,14 @@ export function AgendaItemList({
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      onClick={() => handleMoveItemToDay(item, "next")}
-                                        disabled={typeof totalDays === 'number' && (item.dayIndex + 1) >= totalDays}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleMoveItemToDay(item, "next");
+                                      }}
+                                      disabled={typeof totalDays === 'number' && (item.dayIndex + 1) >= totalDays}
                                       title="Move to next day"
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <Plus className="h-3.5 w-3.5" />
                                       <span className="sr-only">Move to next day</span>
@@ -530,8 +694,12 @@ export function AgendaItemList({
                                     <Button 
                                       variant="outline" 
                                       size="icon" 
-                                      onClick={() => onEdit(item)}
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onEdit(item);
+                                      }}
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                     >
                                       <Edit className="h-3.5 w-3.5" />
                                       <span className="sr-only">Edit</span>
@@ -540,8 +708,12 @@ export function AgendaItemList({
                                     <Button 
                                       variant="outline" 
                                       size="icon" 
-                                      onClick={() => handleSplitItem(item)}
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleSafeSplit(e, () => handleSplitItem(item));
+                                      }}
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                       title="Split this item into two"
                                     >
                                       <CopyPlus className="h-3.5 w-3.5" />
@@ -551,8 +723,12 @@ export function AgendaItemList({
                                     <Button 
                                       variant="outline" 
                                       size="icon" 
-                                      onClick={() => handleDeleteItem(item.id)}
-                                      className="h-7 w-7 rounded-full border-[1px] border-gray-400 dark:border-gray-600"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteItem(item.id);
+                                      }}
+                                      className="h-7 w-7 hover:h-7.5 hover:w-7.5 transform hover:scale-110 transition-all rounded-full border-[1px] border-gray-400 dark:border-gray-600"
                                       title="Delete item"
                                     >
                                       <Trash className="h-3.5 w-3.5" />
@@ -562,18 +738,13 @@ export function AgendaItemList({
                                 </div>
                               </CardHeader>
                               <CardContent className="pl-10">
-                                <div className="flex justify-between text-sm">
-                                  <div>
-                                    <span className="font-medium">Duration:</span> {formatDuration(item.durationMinutes)}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Time:</span> {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
-                                    {adhereToTimeRestrictions && checkTimeExceeded(item) && (
-                                      <span className="ml-2 text-xs text-red-500 font-medium">
-                                        Exceeds time limit
-                                      </span>
-                                    )}
-                                  </div>
+                                <div className="text-sm">
+                                  {formatDuration(item.durationMinutes)} from {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                                  {adhereToTimeRestrictions && checkTimeExceeded(item) && (
+                                    <span className="ml-2 text-xs text-red-500 font-medium">
+                                      Exceeds time limit
+                                    </span>
+                                  )}
                                 </div>
                                 {item.description && (
                                   <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
@@ -590,12 +761,14 @@ export function AgendaItemList({
                             {onAddAtPosition && (index < dayItems.length - 1) && (
                               <div 
                                 className="flex items-center justify-center my-2 group cursor-pointer"
-                                onClick={() => {
-                                  // Calculate the midpoint between current item and next item
-                                  const currentOrder = item.order;
-                                  const nextOrder = dayItems[index + 1].order;
-                                  const midpointOrder = Math.floor((currentOrder + nextOrder) / 2);
-                                  handleAddAtPosition(dayIndex, midpointOrder);
+                                onClick={(e) => {
+                                  handleSafeSplit(e, () => {
+                                    // Calculate the midpoint between current item and next item
+                                    const currentOrder = item.order;
+                                    const nextOrder = dayItems[index + 1].order;
+                                    const midpointOrder = Math.floor((currentOrder + nextOrder) / 2);
+                                    handleAddAtPosition(dayIndex, midpointOrder);
+                                  });
                                 }}
                               >
                                 <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
@@ -610,20 +783,22 @@ export function AgendaItemList({
                         {onAddAtPosition && (index === dayItems.length - 1) && (
                           <div 
                             className="flex items-center justify-center my-2 group cursor-pointer"
-                            onClick={() => {
-                              // Add after the last item
-                              const lastOrder = item.order;
-                              const newOrder = lastOrder + 1000; // Add with significant gap after last item
-                              handleAddAtPosition(dayIndex, newOrder);
+                            onClick={(e) => {
+                              handleSafeSplit(e, () => {
+                                // Add after the last item
+                                const lastOrder = item.order;
+                                const newOrder = lastOrder + 1000; // Add with significant gap after last item
+                                handleAddAtPosition(dayIndex, newOrder);
+                              });
                             }}
-                      >
-                        <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
-                        <div className="mx-2 p-1 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
-                          <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                        </div>
-                        <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
-                      </div>
-                    )}
+                          >
+                            <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
+                            <div className="mx-2 p-1 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
+                              <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                            </div>
+                            <div className="flex-grow border-t border-dashed group-hover:border-primary/50"></div>
+                          </div>
+                        )}
                       </Fragment>
                     ))}
                     {provided.placeholder}

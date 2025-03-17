@@ -72,20 +72,22 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     // Properly await params.id before using it
     const id = await Promise.resolve(params.id);
 
-    console.log(`Deleting event ${id}`)
+    console.log(`DELETE API: Attempting to delete event ${id}`);
 
     // Delete the event using the admin client (bypasses RLS)
-    const { error } = await supabaseAdmin.from("events").delete().eq("id", id)
+    console.log(`DELETE API: Executing Supabase delete operation for event ${id}`);
+    const { error, data } = await supabaseAdmin.from("events").delete().eq("id", id);
 
     if (error) {
-      console.error("Error deleting event:", error)
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("DELETE API: Error deleting event from database:", error);
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true })
+    console.log(`DELETE API: Successfully deleted event ${id}`, data);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Error in delete event API:", error)
-    return NextResponse.json({ error: error.message || "An unexpected error occurred" }, { status: 500 })
+    console.error("DELETE API: Caught exception in delete event handler:", error);
+    return NextResponse.json({ error: error.message || "An unexpected error occurred" }, { status: 500 });
   }
 }
 

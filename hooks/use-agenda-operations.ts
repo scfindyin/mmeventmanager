@@ -5,6 +5,26 @@ import type { AgendaItem } from '@/lib/types'
 import { getErrorMessage } from '@/lib/error-utils'
 import { v4 as uuidv4 } from 'uuid'
 
+// Helper to preserve scroll position
+const withScrollPreservation = async (callback: () => Promise<any>) => {
+  // Save current scroll position
+  const scrollY = window.scrollY;
+  
+  try {
+    // Execute the callback
+    const result = await callback();
+    
+    // Restore scroll position
+    setTimeout(() => window.scrollTo(0, scrollY), 0);
+    
+    return result;
+  } catch (error) {
+    // Still restore scroll position even if there's an error
+    setTimeout(() => window.scrollTo(0, scrollY), 0);
+    throw error;
+  }
+};
+
 export interface UseAgendaOperationsProps {
   onReorder: (items: AgendaItem[], skipRefresh?: boolean) => void
   toast: (options: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
@@ -108,37 +128,56 @@ export const useAgendaOperations = ({ onReorder = () => {}, toast, eventStartTim
 
   // Delete an agenda item
   const deleteItem = async (item: AgendaItem, currentItems: AgendaItem[]) => {
-    // Create new items array without the deleted item
-    let newItems = currentItems.filter((i: AgendaItem) => i.id !== item.id);
+    try {
+      // First, explicitly delete the item from the database
+      const eventId = item.event_id;
+      const deleteResponse = await fetch(`/api/events/${eventId}/items/${item.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-    // Normalize all days
-    normalizeOrderPositions(newItems);
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json().catch(() => ({}));
+        console.error("Delete API error:", errorData);
+        throw new Error(errorData.error || "Failed to delete item");
+      }
 
-    // First update UI with locally recalculated times
-    const localRecalculatedItems = agendaService.calculateItemTimes(newItems, eventStartTime);
-    onReorder(localRecalculatedItems);
-    
-    // Update database in background and get recalculated items
-    const updatedItems = await updateDatabase('delete', newItems);
-    
-    // Update UI again with server-recalculated items
-    onReorder(updatedItems);
+      console.log(`Item ${item.id} successfully deleted from database`);
+
+      // Create new items array without the deleted item
+      let newItems = currentItems.filter((i: AgendaItem) => i.id !== item.id);
+
+      // Normalize all days
+      normalizeOrderPositions(newItems);
+
+      // First update UI with locally recalculated times
+      const localRecalculatedItems = agendaService.calculateItemTimes(newItems, eventStartTime);
+      onReorder(localRecalculatedItems);
+      
+      // Update database in background
+      updateDatabase('delete', newItems);
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete item. Please try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   // Split an item into two identical items
   const splitItem = async (origItem: AgendaItem, newItem: AgendaItem, currentItems: AgendaItem[]) => {
     setIsLoading(true);
     try {
-      // Create a copy of both items with half the duration
-      const halfDuration = Math.ceil(origItem.durationMinutes / 2);
-      const updatedOrigItem = {
-        ...origItem,
-        durationMinutes: halfDuration
-      };
+      // Create an exact copy with the same duration (true copy)
+      const updatedOrigItem = { ...origItem };
       
-      const updatedNewItem = {
+      const updatedNewItem = { 
         ...newItem,
-        durationMinutes: halfDuration
+        durationMinutes: origItem.durationMinutes // Keep the same duration as original
       };
       
       // Create a new items array with both updated items
@@ -158,6 +197,12 @@ export const useAgendaOperations = ({ onReorder = () => {}, toast, eventStartTim
       
       // Update UI again with server-recalculated items
       onReorder(updatedItems);
+      
+      // Return both item IDs
+      return {
+        originalItemId: updatedOrigItem.id,
+        newItemId: updatedNewItem.id
+      };
     } catch (error) {
       console.error("Error splitting item:", error);
       toast({
@@ -165,6 +210,7 @@ export const useAgendaOperations = ({ onReorder = () => {}, toast, eventStartTim
         description: "Failed to split item. Please try again.",
         variant: "destructive",
       });
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -225,14 +271,10 @@ export const useAgendaOperations = ({ onReorder = () => {}, toast, eventStartTim
       };
     });
 
-    // First update UI with locally recalculated times
-    const localRecalculatedItems = agendaService.calculateItemTimes(itemsInNewOrder, eventStartTime);
-    onReorder(localRecalculatedItems);
-    
-    // Update database without skipping and get recalculated items
+    // Update database first and get recalculated items
     const updatedItems = await updateDatabase('move', itemsInNewOrder, false);
-    
-    // Update UI again with server-recalculated items
+
+    // Only update UI after database operation succeeds
     onReorder(updatedItems);
   }
 

@@ -39,7 +39,6 @@ export function EventDashboard() {
       }
       
       const data = await response.json()
-      console.log("Fetched events:", data.data)
       setEvents(data.data || [])
     } catch (error: any) {
       console.error("Error fetching events:", error)
@@ -88,26 +87,48 @@ export function EventDashboard() {
   }
 
   async function handleDeleteEvent(id: string) {
+    console.log(`Attempting to delete event with ID: ${id}`);
+    
     try {
       // Delete using the API to bypass RLS
+      console.log(`Sending DELETE request to API for event ID: ${id}`);
+      
       const response = await fetch(`/api/events/${id}`, {
         method: "DELETE",
-      })
-
+      });
+      
+      console.log(`DELETE response status: ${response.status}`);
+      
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to delete event")
+        const error = await response.json();
+        console.error(`Error response from DELETE API: ${JSON.stringify(error)}`);
+        throw new Error(error.error || "Failed to delete event");
+      }
+      
+      // Try to parse the response as JSON only if there's content
+      let responseData;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json") && response.status !== 204) {
+        try {
+          responseData = await response.json();
+          console.log(`Successful DELETE response: ${JSON.stringify(responseData)}`);
+        } catch (e) {
+          console.log("No JSON body in delete response");
+        }
+      } else {
+        console.log("Response has no JSON content or is a 204 No Content response");
       }
 
       toast({
         title: "Event deleted",
         description: "The event has been successfully deleted.",
-      })
+      });
 
-      fetchEvents()
+      console.log(`Refreshing events after deletion of ${id}`);
+      fetchEvents();
     } catch (error: any) {
-      console.error("Error deleting event:", error)
-      setDashboardError(getErrorMessage(error))
+      console.error("Error deleting event:", error);
+      setDashboardError(getErrorMessage(error));
     }
   }
 
@@ -124,8 +145,8 @@ export function EventDashboard() {
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-7xl">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Event Agenda Manager</h1>
+        <div className="flex items-center justify-between mb-6 px-6">
+          <h1 className="text-6xl font-lilita dark:text-white">Events</h1>
           <ThemeToggle />
         </div>
         <div className="flex items-center justify-center h-64">
@@ -140,8 +161,8 @@ export function EventDashboard() {
 
   return (
     <div className="container mx-auto max-w-7xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Event Agenda Manager</h1>
+      <div className="flex items-center justify-between mb-6 px-6">
+        <h1 className="text-6xl font-lilita dark:text-white">Events</h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button onClick={handleCreateEvent}>

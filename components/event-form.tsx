@@ -20,6 +20,7 @@ import { dateToDbString, dbStringToDate } from "@/lib/utils"
 import Image from "next/image"
 import { ClientDayPicker } from '@/components/ClientDayPicker'
 import BasicTimePicker from '@/components/BasicTimePicker'
+import { BorderBeam } from "@/components/magicui/border-beam"
 
 const formSchema = z.object({
   title: z.string().min(2, "Title must be at least 2 characters"),
@@ -229,7 +230,7 @@ export function EventForm({ event, onClose }: EventFormProps) {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>{event?.id ? "Edit Event" : "Create New Event"}</CardTitle>

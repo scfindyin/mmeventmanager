@@ -269,7 +269,18 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
   };
 
   return (
-    <Dialog open={true} onOpenChange={() => onClose()}>
+    <Dialog open={true} onOpenChange={() => {
+      // Save current scroll position
+      const scrollPos = window.scrollY;
+      
+      // Close the dialog
+      onClose();
+      
+      // Restore scroll position after a small delay
+      setTimeout(() => {
+        window.scrollTo(0, scrollPos);
+      }, 100);
+    }}>
       <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{item ? "Edit" : "Add"} Agenda Item</DialogTitle>
@@ -406,7 +417,24 @@ export function AgendaItemForm({ eventId, item, onClose, onSave, adhereToTimeRes
               />
             </div>
             <div className="flex justify-between mt-8">
-              <Button variant="outline" type="button" onClick={onClose}>
+              <Button 
+                variant="outline" 
+                type="button" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  
+                  // Save current scroll position
+                  const scrollPos = window.scrollY;
+                  
+                  // Close the dialog
+                  onClose();
+                  
+                  // Restore scroll position after a small delay
+                  setTimeout(() => {
+                    window.scrollTo(0, scrollPos);
+                  }, 100);
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
