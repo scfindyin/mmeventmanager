@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/tooltip"
 import { printTypeInfo, ensureNumber } from "@/lib/debug-utils"
 import { recalculateAgendaTimes } from "@/lib/agenda-recalculation"
+import { AgendaPdfDownload } from "@/components/agenda-pdf"
 
 interface AgendaManagerProps {
   eventId: string
@@ -635,10 +636,9 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         </div>
         <div className="flex gap-2">
           <ThemeToggle />
-          <Button onClick={handleGeneratePDF}>
-            <Download className="mr-2 h-4 w-4" />
-            Export PDF
-          </Button>
+          {event && (
+            <AgendaPdfDownload event={event} agendaItems={agendaItems} />
+          )}
         </div>
       </div>
 

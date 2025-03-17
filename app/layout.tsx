@@ -182,7 +182,7 @@ export default function RootLayout({
         */}
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <div className="relative z-10">
-            {children}
+          {children}
           </div>
           <Toaster />
         </ThemeProvider>
