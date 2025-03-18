@@ -8,7 +8,6 @@ import { supabase, type Event, type AgendaItem } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { AgendaItemList } from "@/components/agenda-item-list"
 import { AgendaItemForm } from "@/components/agenda-item-form"
-import { generatePDF } from "@/lib/pdf-generator"
 import Image from "next/image"
 import { ErrorDialog } from "@/components/error-dialog"
 import { getErrorMessage } from "@/lib/error-utils"
@@ -372,21 +371,6 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
     }
   };
 
-  async function handleGeneratePDF() {
-    if (!event) return
-
-    try {
-      await generatePDF(event, agendaItems)
-      toast({
-        title: "PDF Generated",
-        description: "Your agenda PDF has been generated and downloaded.",
-      })
-    } catch (error: any) {
-      console.error("Error generating PDF:", error)
-      setManagerError(getErrorMessage(error))
-    }
-  }
-
   async function handleSaveItem(item: AgendaItem) {
     try {
       console.log("handleSaveItem called with:", item);
@@ -637,7 +621,12 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         <div className="flex gap-2">
           <ThemeToggle />
           {event && (
-            <AgendaPdfDownload event={event} agendaItems={agendaItems} />
+            <AgendaPdfDownload event={event} agendaItems={agendaItems}>
+              <Button>
+                <Download className="mr-2 h-4 w-4" />
+                Export PDF
+              </Button>
+            </AgendaPdfDownload>
           )}
         </div>
       </div>
