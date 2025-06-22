@@ -62,7 +62,6 @@
     "pdfmake": "^0.2.18",
     "react": "^19",
     "react-aria-components": "^1.7.1",
-    "react-beautiful-dnd": "latest",
     "react-day-picker": "latest",
     "react-dom": "^19",
     "react-hook-form": "latest",
