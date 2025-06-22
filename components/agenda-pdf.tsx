@@ -27,15 +27,18 @@ const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
     backgroundColor: '#ffffff',
-    fontFamily: 'Helvetica'
-    // No padding here - we'll control each section precisely
+    fontFamily: 'Helvetica',
+    padding: 40, // Global page padding
+    paddingTop: 60, // Extra space for header
+    paddingBottom: 60 // Extra space for footer
   },
+  // Header - stays fixed at top
   pageHeader: {
     position: 'absolute',
     top: 20,
     left: 40,
     right: 40,
-    height: 30, // Fixed height for header
+    height: 30,
     borderBottomWidth: 1,
     borderBottomColor: '#CCCCCC',
     paddingBottom: 5,
@@ -43,38 +46,55 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center'
   },
-  contentArea: {
+  // Footer - stays fixed at bottom
+  footer: {
     position: 'absolute',
-    top: 70, // Below the page header
+    bottom: 30,
     left: 40,
     right: 40,
-    bottom: 70, // Above the footer
+    height: 20,
+    textAlign: 'center',
+    fontSize: 10,
+    color: '#666',
+    borderTopWidth: 1,
+    borderTopColor: '#CCCCCC',
+    paddingTop: 5
   },
-  // First page has no header, so more space for content
-  firstPageContentArea: {
+  pageNumber: {
     position: 'absolute',
-    top: 40,
-    left: 40,
+    bottom: 20,
     right: 40,
-    bottom: 70, // Above the footer
+    fontSize: 10,
+    color: '#666'
   },
-  dayContainer: {
-    marginBottom: 10
+  // First page has different styling
+  firstPage: {
+    padding: 40,
+    paddingBottom: 60 // Space for footer
   },
   dayHeader: {
     fontSize: 16,
     fontWeight: 'bold',
-    padding: 8,
-    marginBottom: 0, // Remove bottom margin completely
-    marginTop: 0
+    marginBottom: 10,
+    marginTop: 0,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE'
   },
   continuedText: {
     fontSize: 10,
     fontStyle: 'italic',
     color: '#666',
-    marginLeft: 5,
-    alignSelf: 'flex-end', // Align to bottom
-    paddingBottom: 2 // Fine-tune vertical alignment
+    marginLeft: 8
+  },
+  dayHeaderContinued: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    paddingBottom: 4,
+    marginBottom: 10,
+    marginTop: 0
   },
   firstPageContent: {
     // First page has no header, so no extra top padding needed
@@ -120,25 +140,30 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
   agendaItem: {
-    marginBottom: 20, // Increase from 15px to 20px for more separation
-    padding: 10,
+    marginBottom: 0,
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingLeft: 10,
+    paddingRight: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#007BFF',
-    breakInside: 'avoid'
+    borderLeftColor: '#007BFF'
   },
   itemTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 5 // Increase from 3px to 5px
+    marginBottom: 4
   },
   itemTime: {
     fontSize: 12,
     color: '#444',
-    marginBottom: 5
+    marginBottom: 3
   },
   itemDescription: {
     fontSize: 11,
-    lineHeight: 1.4 // Add line height for better readability
+    lineHeight: 1.5,
+    padding: 0,
+    margin: 0
   },
   eventDescription: {
     fontSize: 12,
@@ -179,26 +204,11 @@ const styles = StyleSheet.create({
   summaryTopic: {
     flex: 1
   },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    height: 20,
-    textAlign: 'center',
-    fontSize: 10,
-    color: '#666',
-    borderTopWidth: 1,
-    borderTopColor: '#CCCCCC',
-    paddingTop: 5
+  sessionHeader: {
+    marginBottom: 4,
+    marginTop: 6,
+    padding: 0
   },
-  pageNumber: {
-    position: 'absolute',
-    bottom: 20,
-    right: 40,
-    fontSize: 10,
-    color: '#666'
-  }
 });
 
 // Main PDF Document component
@@ -288,61 +298,57 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
   return (
     <Document>
       {/* First page with overview */}
-      <Page size="A4" style={styles.page}>
-        {/* Main title section */}
-        <View style={styles.firstPageContentArea}>
-          <View style={styles.mainHeader}>
-            <Text style={styles.title}>{event.title}</Text>
-            {event.subtitle && (
-              <Text style={styles.subtitle}>{event.subtitle}</Text>
-            )}
-            <Text style={styles.eventDetails}>
-              {eventDateRange}
-              {/* Access hoursOfOperation for the start/end times if available */}
-              {event.startDate && Object.keys(event.hoursOfOperation || {}).length > 0 ? 
-                ` • ${formatTo12Hour(
-                  Object.values(event.hoursOfOperation)[0]?.startTime || "00:00"
-                )} - ${formatTo12Hour(
-                  Object.values(event.hoursOfOperation)[0]?.endTime || "00:00"
-                )}` : 
-                ""}
-              {` • ${agendaItems.length} agenda items`}
-            </Text>
+      <Page size="A4" style={{ ...styles.page, padding: 40 }}>
+        <View style={styles.mainHeader}>
+          <Text style={styles.title}>{event.title}</Text>
+          {event.subtitle && (
+            <Text style={styles.subtitle}>{event.subtitle}</Text>
+          )}
+          <Text style={styles.eventDetails}>
+            {eventDateRange}
+            {event.startDate && Object.keys(event.hoursOfOperation || {}).length > 0 ? 
+              ` • ${formatTo12Hour(
+                Object.values(event.hoursOfOperation)[0]?.startTime || "00:00"
+              )} - ${formatTo12Hour(
+                Object.values(event.hoursOfOperation)[0]?.endTime || "00:00"
+              )}` : 
+              ""}
+            {` • ${agendaItems.length} agenda items`}
+          </Text>
+          
+          {/* Event description */}
+          {(event as any).description && (
+            <Text style={styles.eventDescription}>{(event as any).description}</Text>
+          )}
+          
+          {/* Summary of all agenda items */}
+          <View style={styles.summarySection}>
+            <Text style={styles.summaryTitle}>Agenda Overview</Text>
             
-            {/* Event description */}
-            {(event as any).description && (
-              <Text style={styles.eventDescription}>{(event as any).description}</Text>
-            )}
-            
-            {/* Summary of all agenda items */}
-            <View style={styles.summarySection}>
-              <Text style={styles.summaryTitle}>Agenda Overview</Text>
-              
-              {sortedDays.map(dayIndex => {
-                const formattedDate = formatDayDate(dayIndex);
-                return (
-                  <View key={`summary-day-${dayIndex}`} style={styles.summaryDay}>
-                    <Text style={styles.summaryDayTitle}>
-                      Day {dayIndex + 1}{formattedDate ? ` - ${formattedDate}` : ''}
-                    </Text>
-                    <View style={styles.summaryItems}>
-                      {itemsByDay[dayIndex]
-                        .sort((a, b) => a.order - b.order)
-                        .map(item => (
-                          <View key={`summary-item-${item.id}`} style={styles.summaryItem}>
-                            <Text style={styles.summaryTime}>
-                              {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
-                            </Text>
-                            <Text style={styles.summaryTopic}>
-                              {item.topic}
-                            </Text>
-                          </View>
-                        ))}
-                    </View>
+            {sortedDays.map(dayIndex => {
+              const formattedDate = formatDayDate(dayIndex);
+              return (
+                <View key={`summary-day-${dayIndex}`} style={styles.summaryDay}>
+                  <Text style={styles.summaryDayTitle}>
+                    Day {dayIndex + 1}{formattedDate ? ` - ${formattedDate}` : ''}
+                  </Text>
+                  <View style={styles.summaryItems}>
+                    {itemsByDay[dayIndex]
+                      .sort((a, b) => a.order - b.order)
+                      .map(item => (
+                        <View key={`summary-item-${item.id}`} style={styles.summaryItem}>
+                          <Text style={styles.summaryTime}>
+                            {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                          </Text>
+                          <Text style={styles.summaryTopic}>
+                            {item.topic}
+                          </Text>
+                        </View>
+                      ))}
                   </View>
-                );
-              })}
-            </View>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -373,7 +379,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
             size="A4"
             style={styles.page}
           >
-            {/* Header that appears on every detail page */}
+            {/* Header - fixed at top */}
             <View fixed style={styles.pageHeader}>
               <View style={styles.headerLeft}>
                 <Text style={styles.headerTitle}>{event.title}</Text>
@@ -384,49 +390,36 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
               )}
             </View>
 
-            {/* Content area - safe zone below header and above footer */}
-            <View fixed style={styles.contentArea}>
-              {/* Day header with conditional (continued) indicator */}
-              <View fixed>
-                <View render={({ pageNumber }) => {
-                  // Check if this is the first page for this day
-                  // If we haven't seen this day before, it's the first page
-                  if (!dayStartPages.current.has(dayIndex)) {
-                    dayStartPages.current.set(dayIndex, pageNumber);
-                  }
-                  
-                  // It's the first page if the current pageNumber matches what we stored
-                  const isFirstPageForDay = pageNumber === dayStartPages.current.get(dayIndex);
-                  
-                  return (
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-                      <Text style={styles.dayHeader}>{dayTitle}</Text>
-                      {!isFirstPageForDay && (
-                        <Text style={styles.continuedText}>(continued)</Text>
-                      )}
+            {/* Day title */}
+            <Text style={styles.dayHeader}>{dayTitle}</Text>
+            
+            {/* Items for this day */}
+            {dayItems.map((item, index) => (
+              <View key={item.id} wrap={false} style={{ marginBottom: 12 }}>
+                {/* Session header without left border */}
+                <View style={styles.sessionHeader}>
+                  <Text style={styles.itemTitle}>{item.topic}</Text>
+                  <Text style={styles.itemTime}>
+                    {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)} 
+                    {` (${item.durationMinutes} minutes)`}
+                  </Text>
+                </View>
+                
+                {/* Description content with left border - tightly aligned */}
+                {item.description && (
+                  <View style={styles.agendaItem}>
+                    <View style={{ display: 'flex', flexDirection: 'row' }}>
+                      {/* Text content with no extra padding/margin */}
+                      <Text style={styles.itemDescription}>
+                        {item.description}
+                      </Text>
                     </View>
-                  );
-                }} />
-              </View>
-              
-              {/* Items for this day */}
-              <View style={{ marginTop: 15 }}> {/* Increase from 5px to 15px for more space below header */}
-                {dayItems.map((item, index) => (
-                  <View key={item.id} style={styles.agendaItem} wrap={false}>
-                    <Text style={styles.itemTitle}>{item.topic}</Text>
-                    <Text style={styles.itemTime}>
-                      {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)} 
-                      {` (${item.durationMinutes} minutes)`}
-                    </Text>
-                    {item.description && (
-                      <Text style={styles.itemDescription}>{item.description}</Text>
-                    )}
                   </View>
-                ))}
+                )}
               </View>
-            </View>
-
-            {/* Footer with page number */}
+            ))}
+            
+            {/* Footer - fixed at bottom */}
             <View fixed style={styles.footer}>
               <Text>{`Event Agenda - Generated on ${format(new Date(), "MMMM d, yyyy")}`}</Text>
             </View>
@@ -434,7 +427,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
             <Text 
               fixed 
               style={styles.pageNumber} 
-              render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+              render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} 
             />
           </Page>
         );
@@ -469,4 +462,7 @@ export const AgendaPdfDownload = ({
       {({ loading }) => loading ? 'Preparing PDF...' : children}
     </PDFDownloadLink>
   );
-}; 
+};
+
+// Fix the exports to ensure AgendaPdfDownload is properly exported
+export { AgendaPdfDocument };

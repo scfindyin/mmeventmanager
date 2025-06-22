@@ -89,15 +89,14 @@ export default function RootLayout({
                 sessionStorage.setItem('lastScrollY', lastScrollY.toString());
                 
                 // Add CSS that freezes the scroll position
-                style.textContent = \`
-                  html, body {
-                    overflow: hidden !important;
-                    position: fixed !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    top: -\${lastScrollY}px !important;
-                  }
-                \`;
+                style.textContent = 
+                  'html, body {' +
+                  '  overflow: hidden !important;' +
+                  '  position: fixed !important;' +
+                  '  width: 100% !important;' +
+                  '  height: 100% !important;' +
+                  '  top: -' + lastScrollY + 'px !important;' +
+                  '}';
                 
                 isScrollLocked = true;
               }
