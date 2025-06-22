@@ -24,7 +24,6 @@ import {
 import { printTypeInfo, ensureNumber } from "@/lib/debug-utils"
 import { recalculateAgendaTimes } from "@/lib/agenda-recalculation"
 import { AgendaPdfDownload } from "@/components/agenda-pdf"
-import { AgendaPdfTestExport } from "@/components/agenda-pdf-pdfmake"
 
 interface AgendaManagerProps {
   eventId: string
@@ -622,23 +621,12 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         <div className="flex gap-2">
           <ThemeToggle />
           {event && (
-            <>
-              {/* Test Export Button using pdfmake */}
-              <AgendaPdfTestExport event={event} agendaItems={agendaItems}>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-1 h-3 w-3" />
-                  Test Export
-                </Button>
-              </AgendaPdfTestExport>
-              
-              {/* Regular Export Button using react-pdf */}
-              <AgendaPdfDownload event={event} agendaItems={agendaItems}>
-                <Button>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export PDF
-                </Button>
-              </AgendaPdfDownload>
-            </>
+            <AgendaPdfDownload event={event} agendaItems={agendaItems}>
+              <Button>
+                <Download className="mr-2 h-4 w-4" />
+                Export PDF
+              </Button>
+            </AgendaPdfDownload>
           )}
         </div>
       </div>

@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     fontFamily: 'Helvetica',
     padding: 40, // Global page padding
-    paddingTop: 60, // Extra space for header
+    paddingTop: 80, // Extra space for header (increased from 60)
     paddingBottom: 60 // Extra space for footer
   },
   // Header - stays fixed at top
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     top: 20,
     left: 40,
     right: 40,
-    height: 30,
+    height: 48,
     borderBottomWidth: 1,
     borderBottomColor: '#CCCCCC',
     paddingBottom: 5,
@@ -117,9 +117,23 @@ const styles = StyleSheet.create({
     color: '#666'
   },
   headerLogo: {
-    width: 50,
-    height: 30,
+    width: 80,
+    height: 48,
     objectFit: 'contain'
+  },
+  frontPageLogo: {
+    width: 80,
+    height: 48,
+    objectFit: 'contain',
+    marginLeft: 20
+  },
+  watermark: {
+    position: 'absolute',
+    width: 417, // Approx 70% of A4 width (595 * 0.7)
+    height: 295, // Height based on 70% width and original aspect ratio
+    top: 274,    // (842 / 2) - (295 / 2) = 421 - 147.5
+    left: 89,     // (595 / 2) - (417 / 2) = 297.5 - 208.5
+    opacity: 0.1,
   },
   mainHeader: {
     marginBottom: 20
@@ -209,10 +223,38 @@ const styles = StyleSheet.create({
     marginTop: 6,
     padding: 0
   },
+  frontPageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20
+  },
+  titleSection: {
+    flex: 1,
+    flexDirection: 'column'
+  },
 });
 
 // Main PDF Document component
 const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: AgendaItem[] }) => {
+  // Safety check: ensure all required data is valid before rendering
+  if (!event || !agendaItems || !Array.isArray(agendaItems)) {
+    console.warn('AgendaPdfDocument: Invalid data provided, skipping render');
+    return null;
+  }
+
+  // Additional safety check: ensure all items have required fields
+  const hasValidItems = agendaItems.every(item => 
+    item && 
+    typeof item.id === 'string' && 
+    typeof item.dayIndex === 'number' &&
+    typeof item.order === 'number'
+  );
+
+  if (!hasValidItems) {
+    console.warn('AgendaPdfDocument: Some agenda items have invalid data, skipping render');
+    return null;
+  }
+
   // Group items by day
   const itemsByDay: Record<number, AgendaItem[]> = {};
   agendaItems.forEach(item => {
@@ -298,12 +340,26 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
   return (
     <Document>
       {/* First page with overview */}
-      <Page size="A4" style={{ ...styles.page, padding: 40 }}>
+      <Page size="A4" style={styles.firstPage}>
+        {/* Watermark - fixed so it appears on all pages */}
+        {event.logo_url && (
+          <Image src={event.logo_url} style={styles.watermark} fixed />
+        )}
+        
         <View style={styles.mainHeader}>
-          <Text style={styles.title}>{event.title}</Text>
-          {event.subtitle && (
-            <Text style={styles.subtitle}>{event.subtitle}</Text>
-          )}
+          {/* Header with logo inline */}
+          <View style={styles.frontPageHeader}>
+            <View style={styles.titleSection}>
+              <Text style={styles.title}>{event.title}</Text>
+              {event.subtitle && (
+                <Text style={styles.subtitle}>{event.subtitle}</Text>
+              )}
+            </View>
+            {event.logo_url && (
+              <Image src={event.logo_url} style={styles.frontPageLogo} />
+            )}
+          </View>
+          
           <Text style={styles.eventDetails}>
             {eventDateRange}
             {event.startDate && Object.keys(event.hoursOfOperation || {}).length > 0 ? 
@@ -338,10 +394,10 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
                       .map(item => (
                         <View key={`summary-item-${item.id}`} style={styles.summaryItem}>
                           <Text style={styles.summaryTime}>
-                            {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                            {formatTo12Hour(item.startTime || '')} - {formatTo12Hour(item.endTime || '')}
                           </Text>
                           <Text style={styles.summaryTopic}>
-                            {item.topic}
+                            {item.topic || ''}
                           </Text>
                         </View>
                       ))}
@@ -379,6 +435,11 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
             size="A4"
             style={styles.page}
           >
+            {/* Watermark for subsequent pages */}
+            {event.logo_url && (
+              <Image src={event.logo_url} style={styles.watermark} fixed />
+            )}
+            
             {/* Header - fixed at top */}
             <View fixed style={styles.pageHeader}>
               <View style={styles.headerLeft}>
@@ -394,28 +455,21 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
             <Text style={styles.dayHeader}>{dayTitle}</Text>
             
             {/* Items for this day */}
-            {dayItems.map((item, index) => (
+            {dayItems.map(item => (
               <View key={item.id} wrap={false} style={{ marginBottom: 12 }}>
                 {/* Session header without left border */}
                 <View style={styles.sessionHeader}>
-                  <Text style={styles.itemTitle}>{item.topic}</Text>
+                  <Text style={styles.itemTitle}>{item.topic || ''}</Text>
                   <Text style={styles.itemTime}>
-                    {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)} 
+                    {formatTo12Hour(item.startTime || '')} - {formatTo12Hour(item.endTime || '')}
                     {` (${item.durationMinutes} minutes)`}
                   </Text>
                 </View>
-                
-                {/* Description content with left border - tightly aligned */}
-                {item.description && (
-                  <View style={styles.agendaItem}>
-                    <View style={{ display: 'flex', flexDirection: 'row' }}>
-                      {/* Text content with no extra padding/margin */}
-                      <Text style={styles.itemDescription}>
-                        {item.description}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+
+                {/* Description content with left border */}
+                <View style={styles.agendaItem}>
+                  <Text style={styles.itemDescription}>{item.description || ''}</Text>
+                </View>
               </View>
             ))}
             
@@ -436,7 +490,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
   );
 };
 
-// Export component with PDFDownloadLink wrapper
+// Export component that generates PDF only when clicked
 export const AgendaPdfDownload = ({ 
   event,
   agendaItems,
@@ -446,7 +500,7 @@ export const AgendaPdfDownload = ({
   event: Event, 
   agendaItems: AgendaItem[],
   fileName?: string,
-  children: React.ReactNode 
+  children: React.ReactNode
 }) => {
   if (!event || !agendaItems) {
     return null;
@@ -454,13 +508,28 @@ export const AgendaPdfDownload = ({
   
   const safeFileName = (event.title ? event.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() : 'event') + '-agenda.pdf';
   
+  const handleExport = async () => {
+    // Import react-pdf dynamically only when needed
+    const { pdf } = await import('@react-pdf/renderer');
+    
+    // Create the PDF document with current data
+    const blob = await pdf(<AgendaPdfDocument event={event} agendaItems={agendaItems} />).toBlob();
+    
+    // Trigger download
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = safeFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+  
   return (
-    <PDFDownloadLink
-      document={<AgendaPdfDocument event={event} agendaItems={agendaItems} />}
-      fileName={safeFileName}
-    >
-      {({ loading }) => loading ? 'Preparing PDF...' : children}
-    </PDFDownloadLink>
+    <div onClick={handleExport}>
+      {children}
+    </div>
   );
 };
 

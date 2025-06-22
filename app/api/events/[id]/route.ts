@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   // Properly await params.id before using it
-  const id = await Promise.resolve(params.id);
+  const { id } = await Promise.resolve(params);
   console.log(`PUT /api/events/${id} - Starting`)
 
   try {
@@ -70,7 +70,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     // Properly await params.id before using it
-    const id = await Promise.resolve(params.id);
+    const { id } = await Promise.resolve(params);
 
     console.log(`DELETE API: Attempting to delete event ${id}`);
 
@@ -96,8 +96,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Properly await params.id before using it
-    const id = await Promise.resolve(params.id);
+    const { id } = await Promise.resolve(params);
     
     // Fetch the event
     const { data: event, error: eventError } = await supabaseAdmin
@@ -158,7 +157,7 @@ export async function PATCH(
   try {
     const data = await request.json()
     // Properly await params.id before using it
-    const id = await Promise.resolve(params.id);
+    const { id } = await Promise.resolve(params);
 
     // Validate if there's anything to update
     if (Object.keys(data).length === 0) {

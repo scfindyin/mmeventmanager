@@ -6,7 +6,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const eventId = params.id;
+    const { id: eventId } = await Promise.resolve(params);
     const { movedItemId, items } = await request.json();
 
     if (!items || !Array.isArray(items)) {
