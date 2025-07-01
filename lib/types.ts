@@ -33,6 +33,7 @@ export interface AgendaItem {
   order: number;          // Changed from position for consistency
   startTime: string;      // Format "HH:mm" for consistency
   endTime: string;        // Format "HH:mm" for consistency
+  is_filler?: boolean;    // Added for filler/unscheduled time support
 }
 
 export interface SubItem {

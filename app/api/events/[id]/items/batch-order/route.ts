@@ -40,6 +40,7 @@ export async function PUT(
       order_position: item.order_position,
       start_time: item.start_time || "00:00",
       end_time: item.end_time || "00:00",
+      is_filler: item.is_filler || false,
       updated_at: new Date().toISOString()
     }));
 

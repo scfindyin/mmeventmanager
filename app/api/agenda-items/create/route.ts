@@ -12,6 +12,7 @@ interface DatabaseItem {
   order_position: number;
   start_time: string;
   end_time: string;
+  is_filler?: boolean;
   [key: string]: unknown; // Add index signature for database compatibility
 }
 
@@ -63,7 +64,8 @@ export async function POST(request: Request) {
         day_index: item.day_index,
         order_position: item.order_position,
         start_time: item.start_time || "00:00",
-        end_time: item.end_time || "00:00"
+        end_time: item.end_time || "00:00",
+        is_filler: item.is_filler || false
       }));
       
       // Perform batch upsert
@@ -144,7 +146,8 @@ export async function POST(request: Request) {
       day_index: item.dayIndex,
       order_position: item.order,
       start_time: item.startTime,
-      end_time: item.endTime
+      end_time: item.endTime,
+      is_filler: item.is_filler || false
     }));
 
     // Log the items being updated for debugging

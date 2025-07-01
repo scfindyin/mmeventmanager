@@ -11,6 +11,7 @@ interface DatabaseItem {
   order_position: number;
   start_time: string;
   end_time: string;
+  is_filler: boolean;
 }
 
 /**
@@ -26,7 +27,8 @@ export function toAgendaItem(item: DatabaseItem): AgendaItem {
     dayIndex: item.day_index,
     order: item.order_position,
     startTime: item.start_time,
-    endTime: item.end_time
+    endTime: item.end_time,
+    is_filler: item.is_filler || false
   };
 }
 
@@ -43,7 +45,8 @@ export function toDatabaseItem(item: AgendaItem): DatabaseItem {
     day_index: item.dayIndex,
     order_position: item.order,
     start_time: item.startTime,
-    end_time: item.endTime
+    end_time: item.endTime,
+    is_filler: item.is_filler || false
   };
 }
 

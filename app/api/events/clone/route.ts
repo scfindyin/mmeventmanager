@@ -71,6 +71,7 @@ export async function POST(request: Request) {
         order_position: item.order_position,
         start_time: item.start_time,
         end_time: item.end_time,
+        is_filler: item.is_filler || false,
       }))
 
       const { error: insertItemsError } = await supabaseAdmin.from("agenda_items").insert(newAgendaItems)

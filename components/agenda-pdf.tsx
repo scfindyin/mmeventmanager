@@ -242,8 +242,11 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
     return null;
   }
 
+  // Filter out filler items (is_filler = true) from PDF export
+  const filteredAgendaItems = agendaItems.filter(item => !item.is_filler);
+
   // Additional safety check: ensure all items have required fields
-  const hasValidItems = agendaItems.every(item => 
+  const hasValidItems = filteredAgendaItems.every(item => 
     item && 
     typeof item.id === 'string' && 
     typeof item.dayIndex === 'number' &&
@@ -257,7 +260,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
 
   // Group items by day
   const itemsByDay: Record<number, AgendaItem[]> = {};
-  agendaItems.forEach(item => {
+  filteredAgendaItems.forEach(item => {
     if (!itemsByDay[item.dayIndex]) {
       itemsByDay[item.dayIndex] = [];
     }
@@ -369,7 +372,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
                 Object.values(event.hoursOfOperation)[0]?.endTime || "00:00"
               )}` : 
               ""}
-            {` • ${agendaItems.length} agenda items`}
+            {` • ${filteredAgendaItems.length} agenda items`}
           </Text>
           
           {/* Event description */}

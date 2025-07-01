@@ -66,6 +66,7 @@ interface DatabaseItem {
   order_position: number;
   start_time: string;
   end_time: string;
+  is_filler: boolean;
 }
 
 // Additional utility for handling problematic button clicks

@@ -134,6 +134,7 @@ export async function GET(
       order: item.order_position,
       startTime: item.start_time || "",
       endTime: item.end_time || "",
+      is_filler: item.is_filler || false
     }))
 
     // Combined response
@@ -175,6 +176,7 @@ export async function PATCH(
     if (data.end_date !== undefined) updateData.end_date = data.end_date
     if (data.start_time !== undefined) updateData.start_time = data.start_time
     if (data.end_time !== undefined) updateData.end_time = data.end_time
+    if (data.is_filler !== undefined) updateData.is_filler = data.is_filler
     if (data.logo_url !== undefined) updateData.logo_url = data.logo_url
     if (data.adhereToTimeRestrictions !== undefined) updateData.adhere_to_time_restrictions = data.adhereToTimeRestrictions
 

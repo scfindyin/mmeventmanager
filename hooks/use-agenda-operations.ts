@@ -99,7 +99,8 @@ export const useAgendaOperations = ({ onReorder = () => {}, toast, eventStartTim
             day_index: item.dayIndex,
             order_position: item.order,
             start_time: item.startTime || "00:00",
-            end_time: item.endTime || "00:00"
+            end_time: item.endTime || "00:00",
+            is_filler: item.is_filler || false
           }))
         }),
       });

@@ -80,6 +80,4 @@ You can test the date formatting using these tools:
 2. Add more robust date validation in forms
 3. Implement consistent date formatting across the application
 
-This file documents the journey of fixing date and time issues in the Event Agenda Manager.
-
-Let's deploy this to Vercel! 
+This file documents the journey of fixing date and time issues in the Event Agenda Manager. 

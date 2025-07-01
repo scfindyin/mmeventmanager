@@ -195,7 +195,8 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
         day_index: updatedItem.dayIndex,
         order_position: updatedItem.order,
         start_time: updatedItem.startTime,
-        end_time: updatedItem.endTime
+        end_time: updatedItem.endTime,
+        is_filler: updatedItem.is_filler || false
       }
 
       console.log('💾 Preparing database write:', {
@@ -266,6 +267,7 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
             orderPosition: updatedItem.order,
             startTime: itemData.start_time,
             endTime: itemData.end_time,
+            isFiller: updatedItem.is_filler,
             fullUpdate: true,
             useDirectSql: true
           };
@@ -335,7 +337,8 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
               new_day_index: updatedItem.dayIndex,
               new_order: updatedItem.order,
               new_start_time: itemData.start_time,
-              new_end_time: itemData.end_time
+              new_end_time: itemData.end_time,
+              new_is_filler: updatedItem.is_filler || false
             })
 
             console.log('🔧 SQL RPC update result:', { sqlData, sqlError })
@@ -422,7 +425,8 @@ export function AgendaTimeline({ event, onEventUpdate }: AgendaTimelineProps) {
         dayIndex: savedItem.day_index as number,
         order: savedItem.order_position as number,
         startTime: savedItem.start_time as string || "",
-        endTime: savedItem.end_time as string || ""
+        endTime: savedItem.end_time as string || "",
+        is_filler: savedItem.is_filler as boolean || false
       }
 
       console.log('🔄 Formatted item:', {

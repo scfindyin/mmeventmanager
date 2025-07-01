@@ -21,6 +21,7 @@ interface DatabaseItem {
   order_position: number;
   start_time: string;
   end_time: string;
+  is_filler: boolean;
 }
 
 interface UpdateItemRequest {
@@ -200,7 +201,8 @@ export class AgendaService {
       day_index: item.dayIndex,
       order_position: item.id === itemId ? newOrder : item.order,
       start_time: item.startTime,
-      end_time: item.endTime
+      end_time: item.endTime,
+      is_filler: item.is_filler || false
     }));
 
     console.log("Service: Prepared batch update:", {
@@ -246,7 +248,8 @@ export class AgendaService {
       day_index: item.dayIndex,
       order_position: item.order,
       start_time: item.startTime,
-      end_time: item.endTime
+      end_time: item.endTime,
+      is_filler: item.is_filler || false
     };
   }
 
@@ -263,7 +266,8 @@ export class AgendaService {
       dayIndex: item.day_index,
       order: item.order_position,
       startTime: item.start_time,
-      endTime: item.end_time
+      endTime: item.end_time,
+      is_filler: item.is_filler || false
     };
   }
 

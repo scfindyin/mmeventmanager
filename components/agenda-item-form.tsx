@@ -17,6 +17,7 @@ import { ErrorDialog } from "@/components/error-dialog"
 import { dbStringToDate } from "@/lib/utils"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { printTypeInfo, ensureNumber } from "@/lib/debug-utils"
+import { Checkbox } from "@/components/ui/checkbox"
 
 const formSchema = z.object({
   topic: z.string().min(2, "Topic must be at least 2 characters"),
@@ -66,6 +67,7 @@ export function AgendaItemForm({
   const [formError, setFormError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [timeError, setTimeError] = useState<string | null>(null)
+  const [isFiller, setIsFiller] = useState(item?.is_filler || false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -193,6 +195,14 @@ export function AgendaItemForm({
     return () => subscription.unsubscribe();
   }, [form, adhereToTimeRestrictions, event]);
 
+  // When isFiller is toggled, update topic/description
+  useEffect(() => {
+    if (isFiller) {
+      form.setValue('topic', 'Unscheduled Time')
+      form.setValue('description', 'Unscheduled time that will not be included in the PDF export')
+    }
+  }, [isFiller])
+
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
 
@@ -215,6 +225,7 @@ export function AgendaItemForm({
         order: item?.order || 0, // Default order
         startTime: item?.startTime || '',
         endTime: item?.endTime || '',
+        is_filler: isFiller,
       };
 
       // If we're changing the day for an existing item or it's a new item,
@@ -305,6 +316,14 @@ export function AgendaItemForm({
             }
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Filler Checkbox */}
+        <div className="mb-4 flex items-center gap-2">
+          <Checkbox id="is-filler" checked={isFiller} onCheckedChange={setIsFiller} />
+          <label htmlFor="is-filler" className="text-sm font-medium cursor-pointer">
+            Add as <span className="font-semibold">Unscheduled Time (filler)</span>
+          </label>
+        </div>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
