@@ -21,6 +21,7 @@ export interface Event {
   logo_url: string | null;
   created_at: string; // ISO timestamp from Supabase
   adhereToTimeRestrictions?: boolean; // Whether to enforce time restrictions (default: true)
+  time_increment_minutes?: number; // Time increment in minutes (1, 5, 10, 15, 30, 60)
 }
 
 export interface AgendaItem {
@@ -63,6 +64,7 @@ export interface EventWithDates {
   logo_url: string | null;
   created_at: Date;     // Parsed JavaScript Date object
   adhere_to_time_restrictions?: boolean; // Whether to enforce time restrictions (default: true)
+  time_increment_minutes?: number; // Time increment in minutes (1, 5, 10, 15, 30, 60)
 }
 
 // Date utilities for the new date types
@@ -119,10 +121,18 @@ export const dateUtils = {
    */
   eventToEventWithDates: (event: Event): EventWithDates => {
     return {
-      ...event,
+      id: event.id,
+      title: event.title,
+      subtitle: event.subtitle || null,
+      notes: event.notes || null,
       start_date: dateUtils.parseDate(event.startDate),
       end_date: dateUtils.parseDate(event.endDate),
-      created_at: dateUtils.parseDate(event.created_at)
+      start_time: null,
+      end_time: null,
+      logo_url: event.logo_url,
+      created_at: dateUtils.parseDate(event.created_at),
+      adhere_to_time_restrictions: event.adhereToTimeRestrictions,
+      time_increment_minutes: event.time_increment_minutes || 15
     };
   },
 
@@ -131,11 +141,16 @@ export const dateUtils = {
    */
   eventWithDatesToEvent: (eventWithDates: EventWithDates): Event => {
     return {
-      ...eventWithDates,
+      id: eventWithDates.id,
+      title: eventWithDates.title,
+      subtitle: eventWithDates.subtitle || undefined,
+      notes: eventWithDates.notes || undefined,
       startDate: dateUtils.toISODateString(eventWithDates.start_date),
       endDate: dateUtils.toISODateString(eventWithDates.end_date),
+      logo_url: eventWithDates.logo_url,
       created_at: eventWithDates.created_at.toISOString(),
       adhereToTimeRestrictions: eventWithDates.adhere_to_time_restrictions,
+      time_increment_minutes: eventWithDates.time_increment_minutes,
       hoursOfOperation: {}, // Add default values to satisfy the type checker
       attendees: [],
       agendaItems: []

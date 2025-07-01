@@ -44,6 +44,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
   const [eventEndTime, setEventEndTime] = useState<string>("")
   const [eventStartTime, setEventStartTime] = useState<string>("")
   const [eventStartDate, setEventStartDate] = useState<string>("")
+  const [timeIncrementMinutes, setTimeIncrementMinutes] = useState<number>(15)
   const previousItems = useRef<AgendaItem[]>([])
 
   useEffect(() => {
@@ -91,6 +92,11 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         console.error("ERROR: No event start time found in database. This is required.");
         throw new Error("Event start time is required but not found in database");
       }
+      
+      // Extract the time increment - default to 15 if not set
+      const increment = eventData.time_increment_minutes || 15;
+      console.log(`Event time increment: ${increment} minutes`);
+      setTimeIncrementMinutes(increment);
       
       // Calculate total days if we have start and end dates
       if ((eventData.startDate && eventData.endDate) || (eventData.start_date && eventData.end_date)) {
@@ -235,12 +241,15 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
       }
     }
     
+    // Calculate default duration based on time increment
+    const defaultDuration = timeIncrementMinutes <= 30 ? 30 : timeIncrementMinutes;
+    
     const newItem: AgendaItem = {
       id: `temp-${Date.now()}`,
       event_id: eventId,
       topic: "",
       description: "",
-      durationMinutes: 30,
+      durationMinutes: defaultDuration,
       dayIndex: dayIndex,
       order: orderValue, // Use the calculated position
       startTime: "",
@@ -683,6 +692,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         eventEndTime={eventEndTime}
         eventStartTime={eventStartTime}
         eventStartDate={eventStartDate}
+        timeIncrementMinutes={timeIncrementMinutes}
       />
       
       {/* Always render AgendaItemForm, but conditionally show it */}
@@ -694,6 +704,7 @@ export function AgendaManager({ eventId }: AgendaManagerProps) {
         onSave={handleSaveItem}
         adhereToTimeRestrictions={adhereToTimeRestrictions}
         isOpen={showItemForm} // New prop to control visibility
+        timeIncrementMinutes={timeIncrementMinutes}
       />
       
       <ErrorDialog title="Agenda Manager Error" error={managerError} onClose={() => setManagerError(null)} />

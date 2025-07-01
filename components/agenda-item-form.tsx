@@ -50,6 +50,7 @@ interface AgendaItemFormProps {
   onSave: (item: AgendaItem) => Promise<boolean>
   adhereToTimeRestrictions?: boolean
   isOpen?: boolean
+  timeIncrementMinutes?: number
 }
 
 export function AgendaItemForm({ 
@@ -58,7 +59,8 @@ export function AgendaItemForm({
   onClose, 
   onSave, 
   adhereToTimeRestrictions = true,
-  isOpen = false
+  isOpen = false,
+  timeIncrementMinutes = 15
 }: AgendaItemFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [event, setEvent] = useState<any>(null)
@@ -69,12 +71,15 @@ export function AgendaItemForm({
   const [timeError, setTimeError] = useState<string | null>(null)
   const [isFiller, setIsFiller] = useState(item?.is_filler || false)
 
+  // Calculate default duration based on time increment
+  const defaultDuration = timeIncrementMinutes <= 30 ? 30 : timeIncrementMinutes;
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       topic: item?.topic || "",
       description: item?.description || "",
-      durationMinutes: item?.durationMinutes || 30,
+      durationMinutes: item?.durationMinutes || defaultDuration,
       dayIndex: item?.dayIndex || 0,
     }
   })
@@ -134,7 +139,7 @@ export function AgendaItemForm({
         form.reset({
           topic: item?.topic || "",
           description: item?.description || "",
-          durationMinutes: item?.durationMinutes || 30,
+          durationMinutes: item?.durationMinutes || defaultDuration,
           dayIndex: item?.dayIndex !== undefined ? item.dayIndex : 0,
         }, { keepDirty: false, keepValues: false })
       } catch (error) {
@@ -396,7 +401,7 @@ export function AgendaItemForm({
                       </FormControl>
                       <SelectContent>
                         {Array.from({ length: 32 }, (_, i) => {
-                          const minutes = (i + 1) * 15;
+                          const minutes = (i + 1) * timeIncrementMinutes;
                           const hours = Math.floor(minutes / 60);
                           const mins = minutes % 60;
                           const label = hours > 0 

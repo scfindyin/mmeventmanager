@@ -26,13 +26,17 @@ interface BasicTimePickerProps {
   onChange?: (timeValue: string) => void;
   label?: string;
   minTime?: string; // New prop to disable times before this value
+  timeIncrementMinutes?: number; // Time increment in minutes (1, 5, 10, 15, 30, 60)
+  disabled?: boolean; // Disable the entire picker
 }
 
 export default function BasicTimePicker({ 
   value = "09:00", 
   onChange,
   label = "Select time",
-  minTime
+  minTime,
+  timeIncrementMinutes = 15,
+  disabled = false
 }: BasicTimePickerProps) {
   const [time, setTime] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
@@ -83,10 +87,10 @@ export default function BasicTimePicker({
     }
   };
   
-  // Generate time options in 15-minute increments
+  // Generate time options based on the timeIncrementMinutes
   const timeOptions = [];
   for (let hour = 0; hour < 24; hour++) {
-    for (let minute of [0, 15, 30, 45]) {
+    for (let minute = 0; minute < 60; minute += timeIncrementMinutes) {
       const formattedHour = String(hour).padStart(2, '0');
       const formattedMinute = String(minute).padStart(2, '0');
       const timeValue = `${formattedHour}:${formattedMinute}`;
@@ -106,10 +110,11 @@ export default function BasicTimePicker({
         {/* Button that looks like your date picker */}
         <button
           type="button"
-          className={`flex justify-between items-center w-full border rounded-md px-3 py-2 text-left ${isHovered ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-950'} dark:border-gray-700 dark:text-gray-100`}
-          onClick={() => setIsOpen(!isOpen)}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          className={`flex justify-between items-center w-full border rounded-md px-3 py-2 text-left ${isHovered ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-950'} dark:border-gray-700 dark:text-gray-100 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          onMouseEnter={() => !disabled && setIsHovered(true)}
+          onMouseLeave={() => !disabled && setIsHovered(false)}
+          disabled={disabled}
         >
           <span>{formatTo12Hour(time)}</span>
           <Clock className="h-4 w-4 text-gray-500 dark:text-gray-400" />

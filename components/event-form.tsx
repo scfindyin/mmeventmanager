@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CalendarIcon, Upload, X } from "lucide-react"
 import type { Event } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -37,6 +38,7 @@ const formSchema = z.object({
   start_time: z.string().min(1, "Start time is required"),
   end_time: z.string().min(1, "End time is required"),
   logo_url: z.string().optional(),
+  time_increment_minutes: z.number().min(1).max(60),
 }).refine(
   (data) => {
     return data.end_date >= data.start_date
@@ -59,6 +61,8 @@ export function EventForm({ event, onClose }: EventFormProps) {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(event?.logo_url || null)
   const [saveError, setSaveError] = useState<Error | string | null>(null)
+  const [hasAgendaItems, setHasAgendaItems] = useState(false)
+  const [isCheckingAgendaItems, setIsCheckingAgendaItems] = useState(false)
   const { toast } = useToast()
 
   // Type assertion to handle the snake_case field names from API
@@ -99,6 +103,7 @@ export function EventForm({ event, onClose }: EventFormProps) {
         start_time: apiEvent?.start_time?.substring(0, 5) || "08:00",
         end_time: apiEvent?.end_time?.substring(0, 5) || "17:00",
         logo_url: apiEvent?.logo_url || "",
+        time_increment_minutes: (apiEvent as any)?.time_increment_minutes || 15,
       }
     : {
         title: "",
@@ -109,12 +114,35 @@ export function EventForm({ event, onClose }: EventFormProps) {
         start_time: "08:00",
         end_time: "17:00",
         logo_url: "",
+        time_increment_minutes: 15,
       }
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
   })
+
+  // Check if event has agenda items when editing
+  useEffect(() => {
+    if (event?.id) {
+      checkForAgendaItems(event.id)
+    }
+  }, [event?.id])
+
+  async function checkForAgendaItems(eventId: string) {
+    try {
+      setIsCheckingAgendaItems(true)
+      const response = await fetch(`/api/events/${eventId}/items`)
+      if (response.ok) {
+        const items = await response.json()
+        setHasAgendaItems(items.length > 0)
+      }
+    } catch (error) {
+      console.error('Error checking agenda items:', error)
+    } finally {
+      setIsCheckingAgendaItems(false)
+    }
+  }
 
   // Watch the start_time field to update the end_time field
   const startTime = form.watch("start_time");
@@ -198,6 +226,7 @@ export function EventForm({ event, onClose }: EventFormProps) {
         start_time: data.start_time,
         end_time: data.end_time,
         logo_url: logoUrl,
+        time_increment_minutes: data.time_increment_minutes,
       }
 
       // API call would go here
@@ -277,6 +306,49 @@ export function EventForm({ event, onClose }: EventFormProps) {
                   )}
                 />
                 
+                <FormField
+                  control={form.control}
+                  name="time_increment_minutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Time Increment</FormLabel>
+                      <FormDescription>
+                        Choose the time increment for scheduling agenda items
+                      </FormDescription>
+                      <Select 
+                        onValueChange={(value) => field.onChange(parseInt(value))} 
+                        value={field.value?.toString()}
+                        disabled={hasAgendaItems || isCheckingAgendaItems}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select time increment" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">1 minute</SelectItem>
+                          <SelectItem value="5">5 minutes</SelectItem>
+                          <SelectItem value="10">10 minutes</SelectItem>
+                          <SelectItem value="15">15 minutes</SelectItem>
+                          <SelectItem value="30">30 minutes</SelectItem>
+                          <SelectItem value="60">1 hour</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isCheckingAgendaItems && (
+                        <FormDescription className="text-blue-600 dark:text-blue-400">
+                          Checking for agenda items...
+                        </FormDescription>
+                      )}
+                      {hasAgendaItems && !isCheckingAgendaItems && (
+                        <FormDescription className="text-amber-600 dark:text-amber-400">
+                          Time increment cannot be changed when agenda items exist. Delete all agenda items first.
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
                 <div className="flex gap-4">
                   <div className="flex-1">
                     <FormField
@@ -328,8 +400,20 @@ export function EventForm({ event, onClose }: EventFormProps) {
                               value={field.value} 
                               onChange={field.onChange}
                               label="" 
+                              timeIncrementMinutes={form.watch("time_increment_minutes")}
+                              disabled={hasAgendaItems || isCheckingAgendaItems}
                             />
                           </FormControl>
+                          {isCheckingAgendaItems && (
+                            <FormDescription className="text-blue-600 dark:text-blue-400">
+                              Checking for agenda items...
+                            </FormDescription>
+                          )}
+                          {hasAgendaItems && !isCheckingAgendaItems && (
+                            <FormDescription className="text-amber-600 dark:text-amber-400">
+                              Start time cannot be changed when agenda items exist. Delete all agenda items first.
+                            </FormDescription>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -348,8 +432,20 @@ export function EventForm({ event, onClose }: EventFormProps) {
                               onChange={field.onChange}
                               label="" 
                               minTime={form.getValues("start_time")}
+                              timeIncrementMinutes={form.watch("time_increment_minutes")}
+                              disabled={hasAgendaItems || isCheckingAgendaItems}
                             />
                           </FormControl>
+                          {isCheckingAgendaItems && (
+                            <FormDescription className="text-blue-600 dark:text-blue-400">
+                              Checking for agenda items...
+                            </FormDescription>
+                          )}
+                          {hasAgendaItems && !isCheckingAgendaItems && (
+                            <FormDescription className="text-amber-400">
+                              End time cannot be changed when agenda items exist. Delete all agenda items first.
+                            </FormDescription>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}

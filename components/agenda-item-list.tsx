@@ -45,6 +45,7 @@ interface AgendaItemListProps {
   eventEndTime: string
   eventStartTime: string
   eventStartDate?: string
+  timeIncrementMinutes?: number
 }
 
 interface ApiResponse {
@@ -109,7 +110,8 @@ export function AgendaItemList({
   onItemScrolled,
   eventEndTime,
   eventStartTime,
-  eventStartDate
+  eventStartDate,
+  timeIncrementMinutes = 15
 }: AgendaItemListProps) {
   const [currentItems, setCurrentItems] = useState<AgendaItem[]>(items)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -372,17 +374,17 @@ export function AgendaItemList({
           }
           break;
         case 'ArrowLeft':
-          // Subtract 15 minutes from duration (minimum 5 minutes)
+          // Subtract time increment from duration (minimum 5 minutes)
           e.preventDefault();
-          const newDurationDecrease = Math.max(5, selectedItem.durationMinutes - 15);
+          const newDurationDecrease = Math.max(5, selectedItem.durationMinutes - timeIncrementMinutes);
           if (newDurationDecrease !== selectedItem.durationMinutes) {
             memoizedUpdateItem(selectedItem.id, { durationMinutes: newDurationDecrease }, currentItems);
           }
           break;
         case 'ArrowRight':
-          // Add 15 minutes to duration
+          // Add time increment to duration
           e.preventDefault();
-          const newDurationIncrease = selectedItem.durationMinutes + 15;
+          const newDurationIncrease = selectedItem.durationMinutes + timeIncrementMinutes;
           memoizedUpdateItem(selectedItem.id, { durationMinutes: newDurationIncrease }, currentItems);
           break;
         case 'PageUp':
