@@ -81,6 +81,114 @@
   font-weight: 700;
 }
 
+/* Rich Text Editor Styles - Fix for lists not showing bullets/numbers */
+.rsw-ce ul {
+  list-style: disc !important;
+  padding-left: 2em !important;
+  margin: 1em 0 !important;
+}
+
+.rsw-ce ol {
+  list-style: decimal !important;
+  padding-left: 2em !important;
+  margin: 1em 0 !important;
+}
+
+.rsw-ce li {
+  display: list-item !important;
+  margin: 0.5em 0 !important;
+}
+
+/* Ensure proper spacing for paragraphs - tighter spacing */
+.rsw-ce p {
+  margin: 0.25em 0 !important;
+  line-height: 1.4 !important;
+}
+
+.rsw-ce p:first-child {
+  margin-top: 0 !important;
+}
+
+.rsw-ce p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Better line height for the editor */
+.rsw-ce {
+  line-height: 1.4 !important;
+}
+
+
+
+/* Rich Text Display Styles - For viewing formatted content */
+.rich-text-content ul {
+  list-style: disc !important;
+  padding-left: 2em !important;
+  margin: 1em 0 !important;
+}
+
+.rich-text-content ol {
+  list-style: decimal !important;
+  padding-left: 2em !important;
+  margin: 1em 0 !important;
+}
+
+.rich-text-content li {
+  display: list-item !important;
+  margin: 0.5em 0 !important;
+}
+
+.rich-text-content p {
+  margin: 0.25em 0 !important;
+  line-height: 1.4 !important;
+}
+
+.rich-text-content p:first-child {
+  margin-top: 0 !important;
+}
+
+.rich-text-content p:last-child {
+  margin-bottom: 0 !important;
+}
+
+
+
+/* Better overall line height for display */
+.rich-text-content {
+  line-height: 1.4 !important;
+}
+
+/* Header styles for rich text editor and display */
+.rsw-ce h1,
+.rich-text-content h1 {
+  font-size: 1.5em !important;
+  font-weight: bold !important;
+  margin: 0.5em 0 0.25em 0 !important;
+  line-height: 1.3 !important;
+}
+
+.rsw-ce h2,
+.rich-text-content h2 {
+  font-size: 1.3em !important;
+  font-weight: bold !important;
+  margin: 0.4em 0 0.2em 0 !important;
+  line-height: 1.3 !important;
+}
+
+.rsw-ce h3,
+.rich-text-content h3 {
+  font-size: 1.1em !important;
+  font-weight: bold !important;
+  margin: 0.3em 0 0.15em 0 !important;
+  line-height: 1.3 !important;
+}
+
+/* Smaller text option */
+.rsw-ce small,
+.rich-text-content small {
+  font-size: 0.9em !important;
+}
+
 /* 
   Custom styles removed to allow shadcn date picker styles to work correctly
   If you need to customize the date picker appearance, use the classNames prop 

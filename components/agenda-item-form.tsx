@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { RichTextEditor } from "@/components/rich-text-editor"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type AgendaItem } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -306,7 +307,7 @@ export function AgendaItemForm({
         onClose();
       }
     }}>
-      <DialogContent className="sm:max-w-[640px]">
+      <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {item?.id && !item.id.startsWith('temp-') 
@@ -353,21 +354,20 @@ export function AgendaItemForm({
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Add a description for this agenda item" 
-                        className="min-h-[100px]"
-                        {...field} 
+                      <RichTextEditor
                         value={field.value || ""}
-                        onChange={(e) => {
-                          field.onChange(e)
+                        onChange={(value) => {
+                          field.onChange(value)
                           
                           // Ensure we always store a string value, never undefined/null
-                          form.setValue('description', e.target.value || "", { 
+                          form.setValue('description', value || "", { 
                             shouldValidate: true,
                             shouldDirty: true,
                             shouldTouch: true
                           })
                         }}
+                        placeholder="Add a description for this agenda item"
+                        className="min-h-[100px]"
                       />
                     </FormControl>
                     <FormMessage />

@@ -5,6 +5,238 @@ import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Image } from '
 import type { AgendaItem, Event } from '@/lib/types';
 import { format, addDays } from 'date-fns';
 
+// Helper function to decode HTML entities
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+// Helper function to parse HTML and return formatted PDF components
+function parseHtmlToPdfComponents(html: string): React.ReactNode[] {
+  if (!html) return [];
+  
+  // If it's already plain text (no HTML tags), return as simple text
+  if (!html.includes('<') || !html.includes('>')) {
+    return [<Text key="plain" style={styles.itemDescription}>{decodeHtmlEntities(html)}</Text>];
+  }
+
+  const components: React.ReactNode[] = [];
+  let key = 0;
+
+  // Simple HTML parser - handles common rich text elements
+  const parseElement = (htmlString: string, parentStyles: any = {}): React.ReactNode[] => {
+    const elements: React.ReactNode[] = [];
+    let currentIndex = 0;
+    
+    // Regex to find HTML tags and their content
+    const tagRegex = /<(\/?)(h[1-6]|p|ul|ol|li|b|strong|i|em|u|span|br)([^>]*)>/gi;
+    let match;
+    let listCounter = 0;
+    let isInOrderedList = false;
+    
+    while ((match = tagRegex.exec(htmlString)) !== null) {
+      // Add text before the tag
+      if (match.index > currentIndex) {
+        const textContent = htmlString.slice(currentIndex, match.index);
+        if (textContent.trim()) {
+          elements.push(
+            <Text key={`text-${key++}`} style={{...styles.itemDescription, ...parentStyles}}>
+              {decodeHtmlEntities(textContent)}
+            </Text>
+          );
+        }
+      }
+      
+      const isClosing = match[1] === '/';
+      const tagName = match[2].toLowerCase();
+      
+      if (!isClosing) {
+        // Handle opening tags
+        switch (tagName) {
+          case 'h1':
+          case 'h2':
+          case 'h3':
+            // Find the closing tag and extract content
+            const headerRegex = new RegExp(`<${tagName}[^>]*>(.*?)</${tagName}>`, 'gi');
+            const headerMatch = headerRegex.exec(htmlString.slice(match.index));
+            if (headerMatch) {
+              const headerSize = tagName === 'h1' ? 16 : tagName === 'h2' ? 14 : 12;
+              elements.push(
+                <Text key={`header-${key++}`} style={{
+                  ...styles.itemDescription,
+                  fontSize: headerSize,
+                  fontWeight: 'bold',
+                  marginTop: 8,
+                  marginBottom: 4
+                                 }}>
+                   {decodeHtmlEntities(headerMatch[1])}
+                 </Text>
+              );
+              tagRegex.lastIndex = match.index + headerMatch[0].length;
+            }
+            break;
+            
+          case 'p':
+            // Find paragraph content
+            const pRegex = /<p[^>]*>(.*?)<\/p>/gi;
+            const pMatch = pRegex.exec(htmlString.slice(match.index));
+            if (pMatch) {
+              const pContent = pMatch[1];
+              // Parse paragraph content for nested formatting
+              const pElements = parseElement(pContent, parentStyles);
+              elements.push(
+                <View key={`para-${key++}`} style={{ marginBottom: 4 }}>
+                  {pElements}
+                </View>
+              );
+              tagRegex.lastIndex = match.index + pMatch[0].length;
+            }
+            break;
+            
+          case 'ul':
+            isInOrderedList = false;
+            listCounter = 0;
+            break;
+            
+          case 'ol':
+            isInOrderedList = true;
+            listCounter = 0;
+            break;
+            
+          case 'li':
+            // Find list item content
+            const liRegex = /<li[^>]*>(.*?)<\/li>/gi;
+            const liMatch = liRegex.exec(htmlString.slice(match.index));
+            if (liMatch) {
+              listCounter++;
+              const bullet = isInOrderedList ? `${listCounter}. ` : '• ';
+              const liContent = liMatch[1];
+              // Parse list item content for nested formatting
+              const liElements = parseElement(liContent, parentStyles);
+              elements.push(
+                <View key={`li-${key++}`} style={{ 
+                  flexDirection: 'row', 
+                  marginBottom: 2,
+                  paddingLeft: 10
+                }}>
+                  <Text style={{...styles.itemDescription, ...parentStyles, width: 20}}>
+                    {bullet}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    {liElements}
+                  </View>
+                </View>
+              );
+              tagRegex.lastIndex = match.index + liMatch[0].length;
+            }
+            break;
+            
+          case 'b':
+          case 'strong':
+            // Find bold content
+            const boldRegex = new RegExp(`<${tagName}[^>]*>(.*?)</${tagName}>`, 'gi');
+            const boldMatch = boldRegex.exec(htmlString.slice(match.index));
+            if (boldMatch) {
+              elements.push(
+                <Text key={`bold-${key++}`} style={{
+                  ...styles.itemDescription,
+                  ...parentStyles,
+                                     fontWeight: 'bold'
+                 }}>
+                   {decodeHtmlEntities(boldMatch[1])}
+                 </Text>
+              );
+              tagRegex.lastIndex = match.index + boldMatch[0].length;
+            }
+            break;
+            
+          case 'i':
+          case 'em':
+            // Find italic content
+            const italicRegex = new RegExp(`<${tagName}[^>]*>(.*?)</${tagName}>`, 'gi');
+            const italicMatch = italicRegex.exec(htmlString.slice(match.index));
+            if (italicMatch) {
+              elements.push(
+                <Text key={`italic-${key++}`} style={{
+                  ...styles.itemDescription,
+                  ...parentStyles,
+                                     fontStyle: 'italic'
+                 }}>
+                   {decodeHtmlEntities(italicMatch[1])}
+                 </Text>
+              );
+              tagRegex.lastIndex = match.index + italicMatch[0].length;
+                         }
+             break;
+             
+                     case 'u':
+            // Find underline content
+            const underlineRegex = /<u[^>]*>(.*?)<\/u>/gi;
+            const underlineMatch = underlineRegex.exec(htmlString.slice(match.index));
+            if (underlineMatch) {
+              elements.push(
+                <Text key={`underline-${key++}`} style={{
+                  ...styles.itemDescription,
+                  ...parentStyles,
+                  textDecoration: 'underline'
+                }}>
+                  {decodeHtmlEntities(underlineMatch[1])}
+                </Text>
+              );
+              tagRegex.lastIndex = match.index + underlineMatch[0].length;
+            }
+            break;
+             
+           case 'span':
+             // Find span content - just treat as normal text (ignore styling for now)
+             const spanRegex = /<span[^>]*>(.*?)<\/span>/gi;
+             const spanMatch = spanRegex.exec(htmlString.slice(match.index));
+             if (spanMatch) {
+               // Parse span content for nested formatting
+               const spanElements = parseElement(spanMatch[1], parentStyles);
+               elements.push(...spanElements);
+               tagRegex.lastIndex = match.index + spanMatch[0].length;
+             }
+             break;
+            
+          case 'br':
+            elements.push(
+              <Text key={`br-${key++}`} style={styles.itemDescription}>
+                {'\n'}
+              </Text>
+            );
+            break;
+        }
+      }
+      
+      currentIndex = tagRegex.lastIndex || (match.index + match[0].length);
+    }
+    
+         // Add remaining text
+     if (currentIndex < htmlString.length) {
+       const remainingText = htmlString.slice(currentIndex);
+       if (remainingText.trim()) {
+         elements.push(
+           <Text key={`remaining-${key++}`} style={{...styles.itemDescription, ...parentStyles}}>
+             {decodeHtmlEntities(remainingText)}
+           </Text>
+         );
+       }
+     }
+    
+    return elements;
+  };
+
+  return parseElement(html);
+}
+
 // Helper function to format time in 12-hour format with consistent padding
 function formatTo12Hour(time24: string): string {
   if (!time24 || !time24.includes(':')) return time24;
@@ -377,7 +609,9 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
           
           {/* Event description */}
           {(event as any).description && (
-            <Text style={styles.eventDescription}>{(event as any).description}</Text>
+            <View style={styles.eventDescription}>
+              {parseHtmlToPdfComponents((event as any).description)}
+            </View>
           )}
           
           {/* Summary of all agenda items */}
@@ -471,7 +705,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
 
                 {/* Description content with left border */}
                 <View style={styles.agendaItem}>
-                  <Text style={styles.itemDescription}>{item.description || ''}</Text>
+                  {parseHtmlToPdfComponents(item.description || '')}
                 </View>
               </View>
             ))}

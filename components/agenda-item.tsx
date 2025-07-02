@@ -3,6 +3,7 @@
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { RichTextDisplay } from "@/components/rich-text-display"
 import { ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Edit, Trash2, GripVertical } from "lucide-react"
 import { type AgendaItem as AgendaItemType } from "@/lib/types"
 import { Separator } from "@/components/ui/separator"
@@ -69,7 +70,10 @@ export function AgendaItem({
 
             {item.description && (
               <div className="mt-2 text-sm text-muted-foreground">
-                {item.description}
+                <RichTextDisplay 
+                  content={item.description}
+                  className="text-sm text-muted-foreground"
+                />
               </div>
             )}
             

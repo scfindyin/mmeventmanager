@@ -16,6 +16,7 @@ import { recalculateAgendaTimes } from "@/lib/agenda-recalculation"
 import { agendaService } from "@/lib/services/agenda-service"
 import { useAgendaOperations } from "@/hooks/use-agenda-operations"
 import { format, addDays } from "date-fns"
+import { RichTextDisplay } from "@/components/rich-text-display"
 
 // Helper function to format time in 12-hour format
 function formatTo12Hour(time24: string): string {
@@ -773,9 +774,12 @@ export function AgendaItemList({
                                   )}
                                 </div>
                                 {item.description && (
-                                  <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
-                                    {item.description}
-                                  </p>
+                                  <div className="text-sm text-muted-foreground mt-2">
+                                    <RichTextDisplay 
+                                      content={item.description}
+                                      className="text-sm text-muted-foreground"
+                                    />
+                                  </div>
                                 )}
                               </CardContent>
                             </Card>
