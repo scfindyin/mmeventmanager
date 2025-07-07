@@ -472,7 +472,7 @@ export function AgendaItemList({
     try {
       const startDate = new Date(eventStartDate);
       const currentDate = addDays(startDate, dayIndex);
-      return format(currentDate, "MMMM d, yyyy");
+      return format(currentDate, "EEEE, MMMM d, yyyy");
     } catch (error) {
       console.error("Error formatting day date:", error);
       return null;
