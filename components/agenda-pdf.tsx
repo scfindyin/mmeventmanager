@@ -528,7 +528,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
       
       if (startDate) {
         const currentDate = addDays(startDate, dayIndex);
-        return format(currentDate, "MMMM d, yyyy");
+        return format(currentDate, "EEEE, MMMM d, yyyy");
       }
       
       console.error("No valid start date found in event:", event);
