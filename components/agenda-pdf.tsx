@@ -527,7 +527,7 @@ const AgendaPdfDocument = ({ event, agendaItems }: { event: Event, agendaItems: 
       }
       
       if (startDate) {
-        const currentDate = addDays(startDate, dayIndex);
+        const currentDate = addDays(startDate, dayIndex + 1);
         return format(currentDate, "EEEE, MMMM d, yyyy");
       }
       
